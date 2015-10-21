@@ -1,23 +1,55 @@
 var now = new Date();
-window.samples.push({
 
-    type: 'line',
-    x: ['x'],
-    y: ['y'],
-
-    data: _.times(100, _.identity)
+var gendata = function () {
+    return _.times(100, _.identity)
         .reduce(function (memo, i) {
             var x = i * (Math.PI / 100);
-            return memo.concat([
+
+            var r = memo.concat([
                 {
                     x: new Date(now - i * 1000 * 60 * 60 * 24),
-                    y: Math.random(x) * 10
+                    y: Math.sin(x) * 10,
+                    type: 'sin',
+                    z: null
+                },
+                {
+                    x: new Date(now - i * 1000 * 60 * 60 * 24),
+                    y: Math.cos(x) * 10,
+                    type: 'cos',
+                    z: null
                 }
             ]);
-        }, []),
+
+            if ((i % 10) === 0) {
+                r = r.concat([
+                    {
+                        x: new Date(now - i * 1000 * 60 * 60 * 24),
+                        // y: 0,
+                        r: Math.random(x) * 10,
+                        type: 'visits',
+                        z: 'line'
+                    }
+                ]);
+            }
+
+            return r;
+        }, []);
+};
+
+window.samples.push({
+
+    type: 'scatterplot',
+    x: ['x'],
+    y: ['y'],
+    color: 'type',
+
+    settings: {
+        excludeNull: false
+    },
+
+    data: gendata(),
 
     plugins: [
-        tauCharts.api.plugins.get('tooltip')(),
         tauCharts.api.plugins.get('annotations')({
             items: [
                 {
@@ -44,10 +76,53 @@ window.samples.push({
                     color: 'green'
                 }
             ]
-        })
+        }),
+        tauCharts.api.plugins.get('layers')({
+            layers: [
+                {
+                    type: 'line',
+                    y: 'r',
+                    by: 'z',
+                    is: 'line'
+                }
+            ]
+        }),
+        tauCharts.api.plugins.get('tooltip')(),
+        tauCharts.api.plugins.get('legend')()
     ]
 });
 
+window.samples.push({
+
+    type: 'bar',
+    x: ['x'],
+    y: ['y'],
+    color: 'type',
+
+    settings: {
+        excludeNull: false,
+        fitModel: 'none'
+    },
+
+    data: gendata(),
+
+    plugins: [
+        tauCharts.api.plugins.get('layers2')({
+            layers: [
+                {
+                    type: 'line',
+                    y: 'r',
+                    by: 'z',
+                    is: 'line'
+                }
+            ]
+        }),
+        tauCharts.api.plugins.get('tooltip')(),
+        tauCharts.api.plugins.get('legend')()
+    ]
+});
+
+/*
 window.samples.push({
 
     type: 'line',
@@ -788,3 +863,4 @@ window.samples.push({
     ]
 
 });
+    */

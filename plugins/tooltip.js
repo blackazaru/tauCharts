@@ -181,7 +181,7 @@
                     .map(function (k) {
                         var key = k;
                         var val = data[k];
-                        return self.renderItem(self._getLabel(key), self._getFormat(key)(val), key, val);
+                        return self.renderItem(self._getLabel(key), self._getFormat(key, '--')(val), key, val);
                     })
                     .join('');
             },
@@ -193,9 +193,11 @@
                 });
             },
 
-            _getFormat: function (k) {
+            _getFormat: function (k, defaultText) {
                 var meta = this._metaInfo[k] || {format: _.identity};
-                return meta.format;
+                return function (x) {
+                    return (x === null) ? defaultText : meta.format(x);
+                };
             },
 
             _getLabel: function (k) {
