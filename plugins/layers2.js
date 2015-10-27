@@ -13,7 +13,7 @@
 })(function (tauCharts) {
 
     var _ = tauCharts.api._;
-    var d3 = tauCharts.api.d3;
+    var pluginsSDK = tauCharts.api.pluginsSDK;
 
     function layers2(xSettings) {
 
@@ -23,15 +23,17 @@
                 type: 'linear',
                 hideError: false,
                 showPanel: true,
-                showTrend: true
+                showLayers: true,
+                mode: 'dock'
             });
-
-        var xLayer = settings.layers[0];
 
         var ELEMENT_TYPE = {
             line: 'ELEMENT.LINE',
+            area: 'ELEMENT.AREA',
+            dots: 'ELEMENT.POINT',
             scatterplot: 'ELEMENT.POINT',
-            bar: 'ELEMENT.INTERVAL'
+            bar: 'ELEMENT.INTERVAL',
+            'stacked-bar': 'ELEMENT.INTERVAL.STACKED'
         };
 
         return {
@@ -39,30 +41,11 @@
             init: function (chart) {
 
                 this._chart = chart;
-                this._applicableElements = [
-                    'ELEMENT.POINT',
-                    'ELEMENT.LINE',
-                    'ELEMENT.AREA',
-                    'ELEMENT.INTERVAL'
-                ];
-
-                this._isApplicable = this.checkIfApplicable(chart);
 
                 if (settings.showPanel) {
 
                     this._container = chart.insertToRightSidebar(this.containerTemplate);
-
-                    var classToAdd = 'applicable-true';
-                    if (!this._isApplicable) {
-                        classToAdd = 'applicable-false';
-                        this._error = [
-                            'Trend line can\'t be computed for categorical data.',
-                            'Each axis should be either a measure or a date.'
-                        ].join(' ');
-                    }
-
-                    this._container.classList.add(classToAdd);
-
+                    this._container.classList.add('applicable-true');
                     if (settings.hideError) {
                         this._container
                             .classList
@@ -74,12 +57,12 @@
                         var target = e.target;
                         var selector = target.classList;
 
-                        if (selector.contains('i-role-show-trend')) {
-                            settings.showTrend = target.checked;
+                        if (selector.contains('i-role-show-layers')) {
+                            settings.showLayers = target.checked;
                         }
 
-                        if (selector.contains('i-role-change-model')) {
-                            settings.type = target.value;
+                        if (selector.contains('i-role-change-mode')) {
+                            settings.mode = target.value;
                         }
 
                         this._chart.refresh();
@@ -91,155 +74,222 @@
                 }
             },
 
-            checkIfApplicable: function (chart) {
-
-                var self = this;
-                var specRef = chart.getConfig();
-                var isApplicable = false;
-
-                chart.traverseSpec(specRef, function (unit, parentUnit) {
-                    if (self.predicateIsApplicable(specRef, unit, parentUnit)) {
-                        isApplicable = true;
-                    }
-                });
-
-                return isApplicable;
+            predicateIsElement: function (specRef, unit, parentUnit) {
+                return (
+                    (parentUnit)
+                    &&
+                    (parentUnit.type === 'COORDS.RECT')
+                    &&
+                    (unit.type !== 'COORDS.RECT')
+                );
             },
 
-            predicateIsApplicable: function (specRef, unit, parentUnit) {
+            buildLayersLayout: function (specRef, layers, layerInvoker) {
 
-                if (parentUnit && parentUnit.type !== 'COORDS.RECT') {
-                    return false;
-                }
-
-                if (this._applicableElements.indexOf(unit.type) === -1) {
-                    return false;
-                }
-
-                var xScale = specRef.scales[unit.x];
-                var yScale = specRef.scales[unit.y];
-
-                return !(xScale.type === 'ordinal' || yScale.type === 'ordinal');
-            },
-
-            onSpecReady: function (chart, specRef) {
-
-                var self = this;
-
-                if (!settings.showTrend) {
-                    return;
-                }
-
-                specRef.scales['r-position'] = {type: 'linear', source: '/', dim: xLayer.y};
+                specRef.transformations = specRef.transformations || {};
+                specRef.transformations['defined-only'] = function (data, props) {
+                    var k = props.key;
+                    return _(data)
+                        .chain()
+                        .filter(function (row) {
+                            return ((row[k] !== null) && (typeof (row[k]) !== 'undefined'));
+                        })
+                        .value();
+                };
 
                 specRef.sources['$'] = {
                     dims: {
                         x: {type: 'category'},
                         y: {type: 'category'}
                     },
-                    data: [
-                        {x: 1, y: 1}
-                    ]
+                    data: []
                 };
-                specRef.scales['xScale'] = {type: 'ordinal', source: '$', dim: 'x'};
-                specRef.scales['yScale'] = {type: 'ordinal', source: '$', dim: 'y'};
 
-                var oldUnit = specRef.unit;
-                var oldClone = JSON.parse(JSON.stringify(oldUnit));
-                oldClone.y = 'r-position';
-                oldClone.guide.y.padding = oldUnit.guide.y.padding + 30;
-                oldClone.guide.x.hide = true;
-                oldClone.guide.showGridLines = '';
+                if (settings.mode === 'dock') {
+                    specRef.sources['$'].data = [
+                        {
+                            x: 1,
+                            y: 1
+                        }
+                    ];
+                }
 
+                if (settings.mode === 'split') {
+                    specRef.sources['$'].data = layers.map(function (item, i) {
+                        return {
+                            x: 1,
+                            y: (i + 1)
+                        };
+                    });
+                    specRef.sources['$'].data.push({
+                        x: 1,
+                        y: (layers.length + 1)
+                    });
+                }
+
+                specRef.scales['xLayoutScale'] = {type: 'ordinal', source: '$', dim: 'x'};
+                specRef.scales['yLayoutScale'] = {type: 'ordinal', source: '$', dim: 'y'};
+
+                var prevUnit = specRef.unit;
                 specRef.unit = {
                     type: 'COORDS.RECT',
-                    x: 'xScale',
-                    y: 'yScale',
+                    x: 'xLayoutScale',
+                    y: 'yLayoutScale',
                     expression: {
                         source: '$',
                         inherit: false,
                         operator: false
                     },
                     guide: {
-                        showGridLines: ''
+                        showGridLines: '',
+                        x: {cssClass: 'facet-axis'},
+                        y: {cssClass: 'facet-axis'}
                     },
-                    frames: [
-                        {
-                            key: {x: 1, y: 1, i: 0},
-                            source: '$',
-                            pipe: [],
-                            units: [oldUnit]
+                    frames: layers.reduce(
+                        function (memo, item, i) {
+
+                            var layerY = ((settings.mode === 'split') ? (i + 2) : 1);
+
+                            return memo.concat({
+                                key: {x: 1, y: layerY, i: (i + 1)},
+                                source: '$',
+                                pipe: [],
+                                units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), (i + 1), item)]
+                            });
                         },
-                        {
-                            key: {x: 1, y: 1, i: 1},
-                            source: '$',
-                            pipe: [],
-                            units: [oldClone]
-                        }
-                    ]
+                        [
+                            {
+                                key: {x: 1, y: 1, i: 0},
+                                source: '$',
+                                pipe: [],
+                                units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), 0, null)]
+                            }
+                        ])
                 };
+            },
 
-                specRef.transformations = specRef.transformations || {};
-                specRef.transformations['slice-by'] = function (data, props) {
-                    var k = props.key;
-                    var v = props.val;
-                    return _(data)
-                        .chain()
-                        .filter(function (row) {
-                            return (row[k] === v);
-                        })
-                        .value();
-                };
+            onSpecReady: function (chart, specRef) {
 
-                chart.traverseSpec(
-                    {unit:oldClone},
-                    function (unit, parentUnit) {
+                var self = this;
 
-                        if (!self.predicateIsApplicable(specRef, unit, parentUnit)) {
-                            return;
-                        }
+                if (!settings.showLayers) {
+                    return;
+                }
 
-                        var trend = JSON.parse(JSON.stringify(unit));
+                specRef.scales = settings.layers.reduce(
+                    function (memo, l) {
+                        memo[l.y] = {type: 'linear', source: '/', dim: l.y, autoScale: true};
+                        return memo;
+                    },
+                    specRef.scales);
 
-                        trend.type = ELEMENT_TYPE[xLayer.type];
-                        trend.y = 'r-position';
-                        trend.transformation = trend.transformation || [];
-                        trend.transformation.push({
-                            type: 'slice-by',
-                            args: {key: xLayer.by, val: xLayer.is}
-                        });
-                        trend.guide = trend.guide || {};
-                        // trend.guide.widthCssClass = 'graphical-report__line-width-1';
+                self.buildLayersLayout(specRef, settings.layers, function (currUnit, i, xLayer) {
 
-                        parentUnit.units = [trend];
-                    });
+                    var totalDif = (30);
+                    var totalPad = (settings.layers.length * totalDif);
 
-                chart.traverseSpec(
-                    {unit:oldUnit},
-                    function (unit, parentUnit) {
+                    if (i === 0) {
+                        chart.traverseSpec(
+                            {unit:currUnit},
+                            function (unit, parentUnit) {
 
-                        if (!self.predicateIsApplicable(specRef, unit, parentUnit)) {
-                            return;
-                        }
+                                if (!self.predicateIsElement(specRef, unit, parentUnit)) {
+                                    return;
+                                }
 
-                        unit.transformation = unit.transformation || [];
-                        unit.transformation.push({
-                            type: 'slice-by',
-                            args: {key: xLayer.by, val: null}
-                        });
-                    });
+                                unit.transformation = unit.transformation || [];
+                                unit.transformation.push({
+                                    type: 'defined-only',
+                                    args: {key: specRef.scales[unit.y].dim}
+                                });
+
+                                if (settings.mode === 'dock') {
+                                    //parentUnit.guide.y.label = parentUnit.guide.y.label || {};
+                                    //var ys = [parentUnit.guide.y.label.text].concat(_(settings.layers).pluck('y'));
+                                    //parentUnit.guide.y.label.text = ys.join(', ');
+
+                                    // parentUnit.guide.y.padding = parentUnit.guide.y.padding - (settings.layers.length * 25);
+                                    // parentUnit.guide.y.label.padding = parentUnit.guide.y.label.padding + totalPad;
+                                    parentUnit.guide.padding.l = parentUnit.guide.padding.l + totalPad;
+
+                                    parentUnit.guide.y.label.textAnchor = 'end';
+                                    parentUnit.guide.y.label.dock = 'right';
+                                    parentUnit.guide.y.label.padding = -10;
+                                    parentUnit.guide.y.label.cssClass = 'label inline';
+                                }
+                            });
+                    } else {
+                        chart.traverseSpec(
+                            {unit: currUnit},
+                            function (unit, parentUnit) {
+
+                                if (!self.predicateIsElement(specRef, unit, parentUnit)) {
+                                    return;
+                                }
+
+                                var offset = (totalDif * (i));
+                                var gLines = '';
+                                if (settings.mode === 'split') {
+                                    offset = 0;
+                                    gLines = 'xy';
+                                }
+
+                                parentUnit.y = xLayer.y;
+
+                                // parentUnit.guide.padding.l = parentUnit.guide.padding.l + totalPad;
+                                // parentUnit.guide.y.padding = parentUnit.guide.y.padding + offset;
+                                // parentUnit.guide.y.padding = parentUnit.guide.y.padding + offset + 10 * i;
+                                parentUnit.guide.y.label = (parentUnit.guide.y.label || {});
+                                // parentUnit.guide.y.label.text = ((settings.mode === 'split') ? xLayer.y : '');
+                                parentUnit.guide.y.label.text = xLayer.y;
+                                parentUnit.guide.x.hide = true;
+                                parentUnit.guide.showGridLines = gLines;
+
+
+                                if (settings.mode === 'dock') {
+                                    parentUnit.guide.padding.l = parentUnit.guide.padding.l + totalPad;
+                                    parentUnit.guide.y.padding = parentUnit.guide.y.padding + offset + 10 * i;
+                                    parentUnit.guide.y.label.textAnchor = 'end';
+                                    parentUnit.guide.y.label.dock = 'right';
+                                    parentUnit.guide.y.label.padding = -10;
+                                    parentUnit.guide.y.label.cssClass = 'label inline';
+                                }
+
+
+                                unit.type = ELEMENT_TYPE[xLayer.type];
+                                unit.y = xLayer.y;
+                                unit.transformation = unit.transformation || [];
+                                unit.transformation.push({
+                                    type: 'defined-only',
+                                    args: {key: xLayer.y}
+                                });
+                                unit.guide = unit.guide || {};
+                            });
+                    }
+
+                    return currUnit;
+                });
             },
 
             // jscs:disable maximumLineLength
             containerTemplate: '<div class="graphical-report__trendlinepanel"></div>',
             template: _.template([
                 '<label class="graphical-report__trendlinepanel__title graphical-report__checkbox">',
-                '<input type="checkbox" class="graphical-report__checkbox__input i-role-show-trend" <%= showTrend %> />',
+                '<input type="checkbox" class="graphical-report__checkbox__input i-role-show-layers" <%= showLayers %> />',
                 '<span class="graphical-report__checkbox__icon"></span>',
                 '<span class="graphical-report__checkbox__text">',
                 '<%= title %>',
                 '</span>',
                 '</label>',
+
+                '<div>',
+                '<select class="i-role-change-mode graphical-report__select graphical-report__trendlinepanel__control">',
+                '   <option <%= ((mode === "join")  ? "selected" : "") %> value="join">Join</option>',
+                '   <option <%= ((mode === "split") ? "selected" : "") %> value="split">Split</option>',
+                '   <option <%= ((mode === "dock")  ? "selected" : "") %> value="dock">Dock</option>',
+                '</select>',
+                '</div>',
+
                 '<div class="graphical-report__trendlinepanel__error-message"><%= error %></div>'
             ].join('')),
             // jscs:enable maximumLineLength
@@ -249,8 +299,9 @@
                 if (this._container) {
                     this._container.innerHTML = this.template({
                         title: 'Layers',
+                        mode: settings.mode,
                         error: this._error,
-                        showTrend: (settings.showTrend && this._isApplicable) ? 'checked' : ''
+                        showLayers: ((settings.showLayers) ? 'checked' : '')
                     });
                 }
             }

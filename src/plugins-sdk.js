@@ -3,6 +3,10 @@ import {FormatterRegistry} from './formatter-registry';
 
 class PluginsSDK {
 
+    static cloneObject(obj) {
+        return JSON.parse(JSON.stringify(obj));
+    }
+
     static depthFirstSearch(node, predicate) {
         if (predicate(node)) {
             return node;

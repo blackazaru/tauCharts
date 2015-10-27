@@ -10,13 +10,15 @@ var gendata = function () {
                     x: new Date(now - i * 1000 * 60 * 60 * 24),
                     y: Math.sin(x) * 10,
                     type: 'sin',
-                    z: null
+                    z: null,
+                    aspect: 'stable'
                 },
                 {
                     x: new Date(now - i * 1000 * 60 * 60 * 24),
                     y: Math.cos(x) * 10,
                     type: 'cos',
-                    z: null
+                    z: null,
+                    aspect: 'stable'
                 }
             ]);
 
@@ -26,8 +28,17 @@ var gendata = function () {
                         x: new Date(now - i * 1000 * 60 * 60 * 24),
                         // y: 0,
                         r: Math.random(x) * 10,
+                        type: 'visits1',
+                        z: 'line',
+                        aspect: 'over'
+                    },
+                    {
+                        x: new Date(now - i * 1000 * 60 * 60 * 24),
+                        // y: 0,
+                        r1: Math.random(x) * 22,
                         type: 'visits',
-                        z: 'line'
+                        z: 'line',
+                        aspect: 'over'
                     }
                 ]);
             }
@@ -36,6 +47,7 @@ var gendata = function () {
         }, []);
 };
 
+/*
 window.samples.push({
 
     type: 'scatterplot',
@@ -91,10 +103,11 @@ window.samples.push({
         tauCharts.api.plugins.get('legend')()
     ]
 });
+*/
 
 window.samples.push({
 
-    type: 'bar',
+    type: 'line',
     x: ['x'],
     y: ['y'],
     color: 'type',
@@ -110,10 +123,12 @@ window.samples.push({
         tauCharts.api.plugins.get('layers2')({
             layers: [
                 {
-                    type: 'line',
-                    y: 'r',
-                    by: 'z',
-                    is: 'line'
+                    type: 'bar',
+                    y: 'r'
+                },
+                {
+                    type: 'area',
+                    y: 'r1'
                 }
             ]
         }),
