@@ -20,7 +20,6 @@
         var settings = _.defaults(
             xSettings || {},
             {
-                type: 'linear',
                 hideError: false,
                 showPanel: true,
                 showLayers: true,
@@ -41,6 +40,10 @@
             init: function (chart) {
 
                 this._chart = chart;
+
+                var spec = this._chart.getSpec();
+                spec.settings.excludeNull = false;
+                spec.settings.fitModel = null;
 
                 if (settings.showPanel) {
 
@@ -81,6 +84,18 @@
                     (parentUnit.type === 'COORDS.RECT')
                     &&
                     (unit.type !== 'COORDS.RECT')
+                );
+            },
+
+            predicateIsCoord: function (specRef, coordsUnit, parentUnit) {
+                return (
+                    (coordsUnit)
+                    &&
+                    (coordsUnit.type === 'COORDS.RECT')
+                    &&
+                    (_.every(coordsUnit.units, function (subUnit) {
+                        return subUnit.type !== 'COORDS.RECT';
+                    }))
                 );
             },
 
@@ -161,6 +176,12 @@
                 };
             },
 
+            addTransformation: function (unit, transformationType, params) {
+                unit.transformation = unit.transformation || [];
+                unit.transformation.push({type: transformationType, args: params});
+                return unit;
+            },
+
             onSpecReady: function (chart, specRef) {
 
                 var self = this;
@@ -186,56 +207,50 @@
                             {unit:currUnit},
                             function (unit, parentUnit) {
 
-                                if (!self.predicateIsElement(specRef, unit, parentUnit)) {
-                                    return;
+                                if (self.predicateIsElement(specRef, unit, parentUnit)) {
+                                    self.addTransformation(unit, 'defined-only', {key: specRef.scales[unit.y].dim});
                                 }
 
-                                unit.transformation = unit.transformation || [];
-                                unit.transformation.push({
-                                    type: 'defined-only',
-                                    args: {key: specRef.scales[unit.y].dim}
-                                });
-
-                                if (settings.mode === 'dock') {
-                                    parentUnit.guide.padding.l = parentUnit.guide.padding.l + totalPad;
-                                    parentUnit.guide.y.label.textAnchor = 'end';
-                                    parentUnit.guide.y.label.dock = 'right';
-                                    parentUnit.guide.y.label.padding = -10;
-                                    parentUnit.guide.y.label.cssClass = 'label inline';
+                                if (self.predicateIsCoord(specRef, unit)) {
+                                    if (settings.mode === 'dock') {
+                                        unit.guide.padding.l += totalPad;
+                                        unit.guide.y.label.textAnchor = 'end';
+                                        unit.guide.y.label.dock = 'right';
+                                        unit.guide.y.label.padding = -10;
+                                        unit.guide.y.label.cssClass = 'label inline';
+                                    }
                                 }
                             });
+
                     } else {
+
                         chart.traverseSpec(
                             {unit: currUnit},
                             function (unit, parentUnit) {
 
-                                if (!self.predicateIsElement(specRef, unit, parentUnit)) {
-                                    return;
+                                if (self.predicateIsElement(specRef, unit, parentUnit)) {
+                                    unit.type = ELEMENT_TYPE[xLayer.type];
+                                    unit.y = xLayer.y;
+                                    self.addTransformation(unit, 'defined-only', {key: xLayer.y});
                                 }
 
-                                unit.type = ELEMENT_TYPE[xLayer.type];
-                                unit.y = xLayer.y;
-                                unit.transformation = unit.transformation || [];
-                                unit.transformation.push({
-                                    type: 'defined-only',
-                                    args: {key: xLayer.y}
-                                });
+                                if (self.predicateIsCoord(specRef, unit)) {
+                                    unit.y = xLayer.y;
+                                    unit.guide.y.label = (unit.guide.y.label || {});
+                                    unit.guide.y.label.text = xLayer.y;
+                                    unit.guide.x.hide = true;
 
-                                parentUnit.y = xLayer.y;
-                                parentUnit.guide.y.label = (parentUnit.guide.y.label || {});
-                                parentUnit.guide.y.label.text = xLayer.y;
-                                parentUnit.guide.x.hide = true;
-
-                                if (settings.mode === 'split') {
-                                    parentUnit.guide.showGridLines = 'xy';
-                                } else if (settings.mode === 'dock') {
-                                    parentUnit.guide.showGridLines = '';
-                                    parentUnit.guide.padding.l = parentUnit.guide.padding.l + totalPad;
-                                    parentUnit.guide.y.label.textAnchor = 'end';
-                                    parentUnit.guide.y.label.dock = 'right';
-                                    parentUnit.guide.y.label.padding = -10;
-                                    parentUnit.guide.y.label.cssClass = 'label inline';
-                                    parentUnit.guide.y.padding = parentUnit.guide.y.padding + (totalDif * (i)) + 10 * i;
+                                    if (settings.mode === 'split') {
+                                        unit.guide.showGridLines = 'xy';
+                                    } else if (settings.mode === 'dock') {
+                                        unit.guide.showGridLines = '';
+                                        unit.guide.padding.l += totalPad;
+                                        unit.guide.y.label.textAnchor = 'end';
+                                        unit.guide.y.label.dock = 'right';
+                                        unit.guide.y.label.padding = -10;
+                                        unit.guide.y.label.cssClass = 'label inline';
+                                        unit.guide.y.padding += ((totalDif * (i)) + 10 * i);
+                                    }
                                 }
                             });
                     }
@@ -248,11 +263,12 @@
             containerTemplate: '<div class="graphical-report__trendlinepanel"></div>',
             template: _.template([
                 '<label class="graphical-report__trendlinepanel__title graphical-report__checkbox">',
-                '<input type="checkbox" class="graphical-report__checkbox__input i-role-show-layers" <%= showLayers %> />',
-                '<span class="graphical-report__checkbox__icon"></span>',
-                '<span class="graphical-report__checkbox__text">',
-                '<%= title %>',
-                '</span>',
+                '   <input type="checkbox"',
+                '          class="graphical-report__checkbox__input i-role-show-layers"',
+                '          <%= (showLayers ? "checked" : "") %>',
+                '   />',
+                '   <span class="graphical-report__checkbox__icon"></span>',
+                '   <span class="graphical-report__checkbox__text"><%= title %></span>',
                 '</label>',
 
                 '<div>',
@@ -268,12 +284,12 @@
 
             onRender: function (chart) {
 
-                if (this._container) {
+                if (settings.showPanel) {
                     this._container.innerHTML = this.template({
                         title: 'Layers',
                         mode: settings.mode,
                         error: this._error,
-                        showLayers: ((settings.showLayers) ? 'checked' : '')
+                        showLayers: settings.showLayers
                     });
                 }
             }

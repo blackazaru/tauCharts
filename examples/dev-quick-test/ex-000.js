@@ -30,7 +30,7 @@ var gendata = function () {
                         r: Math.random(x) * 10,
                         type: 'visits1',
                         z: 'line',
-                        aspect: 'over'
+                        aspect: 'stable'
                     },
                     {
                         x: new Date(now - i * 1000 * 60 * 60 * 24),
@@ -38,7 +38,7 @@ var gendata = function () {
                         r1: Math.random(x) * 22,
                         type: 'visits',
                         z: 'line',
-                        aspect: 'over'
+                        aspect: 'stable'
                     }
                 ]);
             }
@@ -107,25 +107,18 @@ window.samples.push({
 
 window.samples.push({
 
+    data: gendata(),
     type: 'line',
     x: ['x'],
     y: ['y'],
     color: 'type',
-
-    settings: {
-        excludeNull: false,
-        fitModel: 'none'
-    },
-
-    data: gendata(),
-
     plugins: [
         tauCharts.api.plugins.get('layers')({
             layers: [
-                {
-                    type: 'bar',
-                    y: 'r'
-                },
+                //{
+                //    type: 'bar',
+                //    y: 'r'
+                //},
                 {
                     type: 'area',
                     y: 'r1'
@@ -133,7 +126,17 @@ window.samples.push({
             ]
         }),
         tauCharts.api.plugins.get('tooltip')(),
-        tauCharts.api.plugins.get('legend')()
+        tauCharts.api.plugins.get('legend')(),
+        tauCharts.api.plugins.get('annotations')({
+            items: [
+                {
+                    dim: 'y',
+                    val: [3, 7],
+                    text: 'Horizontal annotation',
+                    color: '#4300FF'
+                }
+            ]
+        })
     ]
 });
 
