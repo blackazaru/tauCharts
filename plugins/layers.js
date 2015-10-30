@@ -1,3 +1,4 @@
+// jscs:disable *
 (function (factory) {
     if (typeof define === 'function' && define.amd) {
         define(['tauCharts'], function (tauPlugins) {
@@ -12,7 +13,7 @@
 })(function (tauCharts) {
 
     var _ = tauCharts.api._;
-    var d3 = tauCharts.api.d3;
+    var pluginsSDK = tauCharts.api.pluginsSDK;
 
     function layers(xSettings) {
 
@@ -22,15 +23,17 @@
                 type: 'linear',
                 hideError: false,
                 showPanel: true,
-                showTrend: true
+                showLayers: true,
+                mode: 'dock'
             });
-
-        var xLayer = settings.layers[0];
 
         var ELEMENT_TYPE = {
             line: 'ELEMENT.LINE',
+            area: 'ELEMENT.AREA',
+            dots: 'ELEMENT.POINT',
             scatterplot: 'ELEMENT.POINT',
-            bar: 'ELEMENT.INTERVAL'
+            bar: 'ELEMENT.INTERVAL',
+            'stacked-bar': 'ELEMENT.INTERVAL.STACKED'
         };
 
         return {
@@ -38,30 +41,11 @@
             init: function (chart) {
 
                 this._chart = chart;
-                this._applicableElements = [
-                    'ELEMENT.POINT',
-                    'ELEMENT.LINE',
-                    'ELEMENT.AREA',
-                    'ELEMENT.INTERVAL'
-                ];
-
-                this._isApplicable = this.checkIfApplicable(chart);
 
                 if (settings.showPanel) {
 
                     this._container = chart.insertToRightSidebar(this.containerTemplate);
-
-                    var classToAdd = 'applicable-true';
-                    if (!this._isApplicable) {
-                        classToAdd = 'applicable-false';
-                        this._error = [
-                            'Trend line can\'t be computed for categorical data.',
-                            'Each axis should be either a measure or a date.'
-                        ].join(' ');
-                    }
-
-                    this._container.classList.add(classToAdd);
-
+                    this._container.classList.add('applicable-true');
                     if (settings.hideError) {
                         this._container
                             .classList
@@ -73,12 +57,12 @@
                         var target = e.target;
                         var selector = target.classList;
 
-                        if (selector.contains('i-role-show-trend')) {
-                            settings.showTrend = target.checked;
+                        if (selector.contains('i-role-show-layers')) {
+                            settings.showLayers = target.checked;
                         }
 
-                        if (selector.contains('i-role-change-model')) {
-                            settings.type = target.value;
+                        if (selector.contains('i-role-change-mode')) {
+                            settings.mode = target.value;
                         }
 
                         this._chart.refresh();
@@ -90,97 +74,194 @@
                 }
             },
 
-            checkIfApplicable: function (chart) {
-
-                var self = this;
-                var specRef = chart.getConfig();
-                var isApplicable = false;
-
-                chart.traverseSpec(specRef, function (unit, parentUnit) {
-                    if (self.predicateIsApplicable(specRef, unit, parentUnit)) {
-                        isApplicable = true;
-                    }
-                });
-
-                return isApplicable;
+            predicateIsElement: function (specRef, unit, parentUnit) {
+                return (
+                    (parentUnit)
+                    &&
+                    (parentUnit.type === 'COORDS.RECT')
+                    &&
+                    (unit.type !== 'COORDS.RECT')
+                );
             },
 
-            predicateIsApplicable: function (specRef, unit, parentUnit) {
+            buildLayersLayout: function (specRef, layers, layerInvoker) {
 
-                if (parentUnit && parentUnit.type !== 'COORDS.RECT') {
-                    return false;
+                specRef.transformations = specRef.transformations || {};
+                specRef.transformations['defined-only'] = function (data, props) {
+                    var k = props.key;
+                    return _(data)
+                        .chain()
+                        .filter(function (row) {
+                            return ((row[k] !== null) && (typeof (row[k]) !== 'undefined'));
+                        })
+                        .value();
+                };
+
+                specRef.sources['$'] = {
+                    dims: {
+                        x: {type: 'category'},
+                        y: {type: 'category'}
+                    },
+                    data: []
+                };
+
+                if (settings.mode === 'dock') {
+                    specRef.sources['$'].data = [
+                        {x: 1, y: 1}
+                    ];
+                } else if (settings.mode === 'split') {
+                    specRef.sources['$'].data = [
+                        {x: 1, y: 1}
+                    ].concat(layers.map(function (item, i) {
+                        return {
+                            x: 1,
+                            y: (i + 2)
+                        };
+                    }));
                 }
 
-                if (this._applicableElements.indexOf(unit.type) === -1) {
-                    return false;
-                }
+                specRef.scales['xLayoutScale'] = {type: 'ordinal', source: '$', dim: 'x'};
+                specRef.scales['yLayoutScale'] = {type: 'ordinal', source: '$', dim: 'y'};
 
-                var xScale = specRef.scales[unit.x];
-                var yScale = specRef.scales[unit.y];
+                var prevUnit = specRef.unit;
+                specRef.unit = {
+                    type: 'COORDS.RECT',
+                    x: 'xLayoutScale',
+                    y: 'yLayoutScale',
+                    expression: {
+                        source: '$',
+                        inherit: false,
+                        operator: false
+                    },
+                    guide: {
+                        showGridLines: '',
+                        x: {cssClass: 'facet-axis'},
+                        y: {cssClass: 'facet-axis'}
+                    },
+                    frames: layers.reduce(
+                        function (memo, item, i) {
 
-                return !(xScale.type === 'ordinal' || yScale.type === 'ordinal');
+                            var layerY = ((settings.mode === 'split') ? (i + 2) : 1);
+
+                            return memo.concat({
+                                key: {x: 1, y: layerY, i: (i + 1)},
+                                source: '$',
+                                pipe: [],
+                                units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), (i + 1), item)]
+                            });
+                        },
+                        [
+                            {
+                                key: {x: 1, y: 1, i: 0},
+                                source: '$',
+                                pipe: [],
+                                units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), 0, null)]
+                            }
+                        ])
+                };
             },
 
             onSpecReady: function (chart, specRef) {
 
                 var self = this;
 
-                if (!settings.showTrend) {
+                if (!settings.showLayers) {
                     return;
                 }
 
-                specRef.transformations = specRef.transformations || {};
-                specRef.transformations['slice-by'] = function (data, props) {
-                    var k = props.key;
-                    var v = props.val;
-                    return _(data)
-                        .chain()
-                        .filter(function (row) {
-                            return (row[k] === v);
-                        })
-                        .value();
-                };
-                specRef.scales['r-position'] = {type: 'linear', source: '/', dim: xLayer.y};
+                specRef.scales = settings.layers.reduce(
+                    function (memo, l) {
+                        memo[l.y] = {type: 'linear', source: '/', dim: l.y, autoScale: true};
+                        return memo;
+                    },
+                    specRef.scales);
 
-                chart.traverseSpec(
-                    specRef,
-                    function (unit, parentUnit) {
+                self.buildLayersLayout(specRef, settings.layers, function (currUnit, i, xLayer) {
 
-                        if (!self.predicateIsApplicable(specRef, unit, parentUnit)) {
-                            return;
-                        }
+                    var totalDif = (30);
+                    var totalPad = (settings.layers.length * totalDif);
 
-                        var trend = JSON.parse(JSON.stringify(unit));
+                    if (i === 0) {
+                        chart.traverseSpec(
+                            {unit:currUnit},
+                            function (unit, parentUnit) {
 
-                        trend.type = ELEMENT_TYPE[xLayer.type];
-                        trend.y = 'r-position';
-                        trend.transformation = trend.transformation || [];
-                        trend.transformation.push({
-                            type: 'slice-by',
-                            args: {key: xLayer.by, val: xLayer.is}
-                        });
-                        trend.guide = trend.guide || {};
+                                if (!self.predicateIsElement(specRef, unit, parentUnit)) {
+                                    return;
+                                }
 
-                        parentUnit.units.push(trend);
+                                unit.transformation = unit.transformation || [];
+                                unit.transformation.push({
+                                    type: 'defined-only',
+                                    args: {key: specRef.scales[unit.y].dim}
+                                });
 
-                        unit.transformation = unit.transformation || [];
-                        unit.transformation.push({
-                            type: 'slice-by',
-                            args: {key: xLayer.by, val: null}
-                        });
-                    });
+                                if (settings.mode === 'dock') {
+                                    parentUnit.guide.padding.l = parentUnit.guide.padding.l + totalPad;
+                                    parentUnit.guide.y.label.textAnchor = 'end';
+                                    parentUnit.guide.y.label.dock = 'right';
+                                    parentUnit.guide.y.label.padding = -10;
+                                    parentUnit.guide.y.label.cssClass = 'label inline';
+                                }
+                            });
+                    } else {
+                        chart.traverseSpec(
+                            {unit: currUnit},
+                            function (unit, parentUnit) {
+
+                                if (!self.predicateIsElement(specRef, unit, parentUnit)) {
+                                    return;
+                                }
+
+                                unit.type = ELEMENT_TYPE[xLayer.type];
+                                unit.y = xLayer.y;
+                                unit.transformation = unit.transformation || [];
+                                unit.transformation.push({
+                                    type: 'defined-only',
+                                    args: {key: xLayer.y}
+                                });
+
+                                parentUnit.y = xLayer.y;
+                                parentUnit.guide.y.label = (parentUnit.guide.y.label || {});
+                                parentUnit.guide.y.label.text = xLayer.y;
+                                parentUnit.guide.x.hide = true;
+
+                                if (settings.mode === 'split') {
+                                    parentUnit.guide.showGridLines = 'xy';
+                                } else if (settings.mode === 'dock') {
+                                    parentUnit.guide.showGridLines = '';
+                                    parentUnit.guide.padding.l = parentUnit.guide.padding.l + totalPad;
+                                    parentUnit.guide.y.label.textAnchor = 'end';
+                                    parentUnit.guide.y.label.dock = 'right';
+                                    parentUnit.guide.y.label.padding = -10;
+                                    parentUnit.guide.y.label.cssClass = 'label inline';
+                                    parentUnit.guide.y.padding = parentUnit.guide.y.padding + (totalDif * (i)) + 10 * i;
+                                }
+                            });
+                    }
+
+                    return currUnit;
+                });
             },
 
             // jscs:disable maximumLineLength
             containerTemplate: '<div class="graphical-report__trendlinepanel"></div>',
             template: _.template([
                 '<label class="graphical-report__trendlinepanel__title graphical-report__checkbox">',
-                '<input type="checkbox" class="graphical-report__checkbox__input i-role-show-trend" <%= showTrend %> />',
+                '<input type="checkbox" class="graphical-report__checkbox__input i-role-show-layers" <%= showLayers %> />',
                 '<span class="graphical-report__checkbox__icon"></span>',
                 '<span class="graphical-report__checkbox__text">',
                 '<%= title %>',
                 '</span>',
                 '</label>',
+
+                '<div>',
+                '<select class="i-role-change-mode graphical-report__select graphical-report__trendlinepanel__control">',
+                '   <option <%= ((mode === "split") ? "selected" : "") %> value="split">Split</option>',
+                '   <option <%= ((mode === "dock")  ? "selected" : "") %> value="dock">Dock</option>',
+                '</select>',
+                '</div>',
+
                 '<div class="graphical-report__trendlinepanel__error-message"><%= error %></div>'
             ].join('')),
             // jscs:enable maximumLineLength
@@ -190,8 +271,9 @@
                 if (this._container) {
                     this._container.innerHTML = this.template({
                         title: 'Layers',
+                        mode: settings.mode,
                         error: this._error,
-                        showTrend: (settings.showTrend && this._isApplicable) ? 'checked' : ''
+                        showLayers: ((settings.showLayers) ? 'checked' : '')
                     });
                 }
             }
@@ -202,3 +284,4 @@
 
     return layers;
 });
+// jscs:enable *

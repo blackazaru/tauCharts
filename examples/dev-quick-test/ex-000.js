@@ -120,7 +120,7 @@ window.samples.push({
     data: gendata(),
 
     plugins: [
-        tauCharts.api.plugins.get('layers2')({
+        tauCharts.api.plugins.get('layers')({
             layers: [
                 {
                     type: 'bar',
