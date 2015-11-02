@@ -11,14 +11,14 @@ var gendata = function () {
                     y: Math.sin(x) * 10,
                     type: 'sin',
                     z: null,
-                    aspect: 'stable'
+                    aspect: 'stable-sin'
                 },
                 {
                     x: new Date(now - i * 1000 * 60 * 60 * 24),
                     y: Math.cos(x) * 10,
                     type: 'cos',
                     z: null,
-                    aspect: 'stable'
+                    aspect: 'stable-cos'
                 }
             ]);
 
@@ -30,7 +30,7 @@ var gendata = function () {
                         r: Math.random(x) * 10,
                         type: 'visits1',
                         z: 'line',
-                        aspect: 'stable'
+                        aspect: 'stable-sin'
                     },
                     {
                         x: new Date(now - i * 1000 * 60 * 60 * 24),
@@ -38,7 +38,15 @@ var gendata = function () {
                         r1: Math.random(x) * 22,
                         type: 'visits',
                         z: 'line',
-                        aspect: 'stable'
+                        aspect: 'stable-cos'
+                    },
+                    {
+                        x: new Date(now - i * 1000 * 60 * 60 * 24),
+                        // y: 0,
+                        r1: Math.random(x) * 22,
+                        type: 'visits',
+                        z: 'line',
+                        aspect: 'stable-sin'
                     }
                 ]);
             }
@@ -115,13 +123,14 @@ window.samples.push({
     plugins: [
         tauCharts.api.plugins.get('layers')({
             layers: [
-                //{
-                //    type: 'bar',
-                //    y: 'r'
-                //},
                 {
                     type: 'area',
                     y: 'r1'
+                }
+                ,
+                {
+                    type: 'bar',
+                    y: 'r'
                 }
             ]
         }),

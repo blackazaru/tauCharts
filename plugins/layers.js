@@ -23,7 +23,7 @@
                 hideError: false,
                 showPanel: true,
                 showLayers: true,
-                mode: 'dock'
+                mode: 'merge'
             });
 
         var ELEMENT_TYPE = {
@@ -117,28 +117,14 @@
                         x: {type: 'category'},
                         y: {type: 'category'}
                     },
-                    data: []
+                    data: [{x: 1, y: 1}]
                 };
-
-                if (settings.mode === 'dock') {
-                    specRef.sources['$'].data = [
-                        {x: 1, y: 1}
-                    ];
-                } else if (settings.mode === 'split') {
-                    specRef.sources['$'].data = [
-                        {x: 1, y: 1}
-                    ].concat(layers.map(function (item, i) {
-                        return {
-                            x: 1,
-                            y: (i + 2)
-                        };
-                    }));
-                }
 
                 specRef.scales['xLayoutScale'] = {type: 'ordinal', source: '$', dim: 'x'};
                 specRef.scales['yLayoutScale'] = {type: 'ordinal', source: '$', dim: 'y'};
 
                 var prevUnit = specRef.unit;
+                var uid = ('ID' + (+ new Date()));
                 specRef.unit = {
                     type: 'COORDS.RECT',
                     x: 'xLayoutScale',
@@ -156,18 +142,18 @@
                     frames: layers.reduce(
                         function (memo, item, i) {
 
-                            var layerY = ((settings.mode === 'split') ? (i + 2) : 1);
+                            var ii = (i + 1);
 
                             return memo.concat({
-                                key: {x: 1, y: layerY, i: (i + 1)},
+                                key: {x: 1, y: 1, id: (uid + ii)},
                                 source: '$',
                                 pipe: [],
-                                units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), (i + 1), item)]
+                                units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), ii, item)]
                             });
                         },
                         [
                             {
-                                key: {x: 1, y: 1, i: 0},
+                                key: {x: 1, y: 1, id: (uid + 0)},
                                 source: '$',
                                 pipe: [],
                                 units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), 0, null)]
@@ -180,6 +166,20 @@
                 unit.transformation = unit.transformation || [];
                 unit.transformation.push({type: transformationType, args: params});
                 return unit;
+            },
+
+            findPrimaryYScale: function (currUnit, specRef) {
+                var self = this;
+                var resY = [];
+                this._chart.traverseSpec(
+                    {unit: currUnit},
+                    function (unit) {
+                        if (self.predicateIsCoord(specRef, unit)) {
+                            resY.push(unit.y);
+                        }
+                    });
+
+                return _.uniq(resY)[0];
             },
 
             onSpecReady: function (chart, specRef) {
@@ -197,10 +197,26 @@
                     },
                     specRef.scales);
 
+                if (settings.mode === 'merge') {
+                    var primaryY = self.findPrimaryYScale(specRef.unit, specRef);
+                    var scaleNames = _(settings.layers).pluck('y').concat(primaryY);
+                    var bounds = scaleNames.reduce(function (memo, yi) {
+                            var info = self._chart.getScaleInfo(yi);
+                            return memo.concat(info.domain());
+                        },
+                        []);
+                    var minMax = d3.extent(bounds);
+                    scaleNames.forEach(function (yi) {
+                        specRef.scales[yi].min = minMax[0];
+                        specRef.scales[yi].max = minMax[1];
+                        specRef.scales[yi].autoScale = false;
+                    });
+                }
+
                 self.buildLayersLayout(specRef, settings.layers, function (currUnit, i, xLayer) {
 
                     var totalDif = (30);
-                    var totalPad = (settings.layers.length * totalDif);
+                    var totalPad = (settings.layers.length * totalDif) - totalDif;
 
                     if (i === 0) {
                         chart.traverseSpec(
@@ -218,6 +234,13 @@
                                         unit.guide.y.label.dock = 'right';
                                         unit.guide.y.label.padding = -10;
                                         unit.guide.y.label.cssClass = 'label inline';
+                                    } else if (settings.mode === 'merge') {
+                                        unit.guide.y.label = (unit.guide.y.label || {});
+                                        unit.guide.y.label.text = [unit.guide.y.label.text]
+                                            .concat(settings.layers.map(function (l) {
+                                                return l.y;
+                                            }))
+                                            .join(', ');
                                     }
                                 }
                             });
@@ -240,9 +263,7 @@
                                     unit.guide.y.label.text = xLayer.y;
                                     unit.guide.x.hide = true;
 
-                                    if (settings.mode === 'split') {
-                                        unit.guide.showGridLines = 'xy';
-                                    } else if (settings.mode === 'dock') {
+                                    if (settings.mode === 'dock') {
                                         unit.guide.showGridLines = '';
                                         unit.guide.padding.l += totalPad;
                                         unit.guide.y.label.textAnchor = 'end';
@@ -250,6 +271,9 @@
                                         unit.guide.y.label.padding = -10;
                                         unit.guide.y.label.cssClass = 'label inline';
                                         unit.guide.y.padding += ((totalDif * (i)) + 10 * i);
+                                    } else if (settings.mode === 'merge') {
+                                        unit.guide.showGridLines = '';
+                                        unit.guide.y.hide = true;
                                     }
                                 }
                             });
@@ -273,8 +297,9 @@
 
                 '<div>',
                 '<select class="i-role-change-mode graphical-report__select graphical-report__trendlinepanel__control">',
-                '   <option <%= ((mode === "split") ? "selected" : "") %> value="split">Split</option>',
+//              '   <option <%= ((mode === "split") ? "selected" : "") %> value="split">Split</option>',
                 '   <option <%= ((mode === "dock")  ? "selected" : "") %> value="dock">Dock</option>',
+                '   <option <%= ((mode === "merge") ? "selected" : "") %> value="merge">Merge</option>',
                 '</select>',
                 '</div>',
 
