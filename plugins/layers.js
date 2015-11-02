@@ -197,26 +197,34 @@
                     },
                     specRef.scales);
 
+                var primaryY = self.findPrimaryYScale(specRef.unit, specRef);
+                var scaleNames = _(settings.layers).pluck('y').concat(primaryY);
+                var hashBounds = scaleNames.reduce(function (memo, yi) {
+                        var info = self._chart.getScaleInfo(yi);
+                        memo[yi] = info.domain().filter(function (n) {
+                            return !isNaN(n) && _.isNumber(n);
+                        });
+                        return memo;
+                    },
+                    {});
+
+                var currLayers = settings.layers.filter(function (l) {
+                    return hashBounds[l.y].length > 0;
+                });
+
                 if (settings.mode === 'merge') {
-                    var primaryY = self.findPrimaryYScale(specRef.unit, specRef);
-                    var scaleNames = _(settings.layers).pluck('y').concat(primaryY);
-                    var bounds = scaleNames.reduce(function (memo, yi) {
-                            var info = self._chart.getScaleInfo(yi);
-                            return memo.concat(info.domain());
-                        },
-                        []);
-                    var minMax = d3.extent(bounds);
-                    scaleNames.forEach(function (yi) {
-                        specRef.scales[yi].min = minMax[0];
-                        specRef.scales[yi].max = minMax[1];
-                        specRef.scales[yi].autoScale = false;
+                    var minMax = d3.extent(_(hashBounds).chain().values().flatten().value());
+                    scaleNames.forEach(function (y) {
+                        specRef.scales[y].min = minMax[0];
+                        specRef.scales[y].max = minMax[1];
+                        specRef.scales[y].autoScale = false;
                     });
                 }
 
-                self.buildLayersLayout(specRef, settings.layers, function (currUnit, i, xLayer) {
+                self.buildLayersLayout(specRef, currLayers, function (currUnit, i, xLayer) {
 
                     var totalDif = (30);
-                    var totalPad = (settings.layers.length * totalDif) - totalDif;
+                    var totalPad = (currLayers.length * totalDif) - totalDif;
 
                     if (i === 0) {
                         chart.traverseSpec(
@@ -237,9 +245,7 @@
                                     } else if (settings.mode === 'merge') {
                                         unit.guide.y.label = (unit.guide.y.label || {});
                                         unit.guide.y.label.text = [unit.guide.y.label.text]
-                                            .concat(settings.layers.map(function (l) {
-                                                return l.y;
-                                            }))
+                                            .concat(_(currLayers).pluck('y'))
                                             .join(', ');
                                     }
                                 }
