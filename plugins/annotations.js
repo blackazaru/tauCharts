@@ -47,7 +47,7 @@
                 var domain = scaleInfo.domain();
                 var min = domain[0];
                 var max = domain[1];
-                if ((from >= max) || (to <= min)) {
+                if (isNaN(min) || isNaN(max) || (from >= max) || (to <= min)) {
                     console.log('Annotation is out of domain');
                     return;
                 }
