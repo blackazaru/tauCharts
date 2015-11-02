@@ -101,17 +101,6 @@
 
             buildLayersLayout: function (specRef, layers, layerInvoker) {
 
-                specRef.transformations = specRef.transformations || {};
-                specRef.transformations['defined-only'] = function (data, props) {
-                    var k = props.key;
-                    return _(data)
-                        .chain()
-                        .filter(function (row) {
-                            return ((row[k] !== null) && (typeof (row[k]) !== 'undefined'));
-                        })
-                        .value();
-                };
-
                 specRef.sources['$'] = {
                     dims: {
                         x: {type: 'category'},
@@ -186,7 +175,25 @@
 
                 var self = this;
 
+                specRef.transformations = specRef.transformations || {};
+                specRef.transformations['defined-only'] = function (data, props) {
+                    var k = props.key;
+                    return _(data)
+                        .chain()
+                        .filter(function (row) {
+                            return ((row[k] !== null) && (typeof (row[k]) !== 'undefined'));
+                        })
+                        .value();
+                };
+
                 if (!settings.showLayers) {
+                    chart.traverseSpec(
+                        specRef,
+                        function (unit, parentUnit) {
+                            if (self.predicateIsElement(specRef, unit, parentUnit)) {
+                                self.addTransformation(unit, 'defined-only', {key: specRef.scales[unit.y].dim});
+                            }
+                        });
                     return;
                 }
 
