@@ -41,10 +41,9 @@
 
                 this._chart = chart;
 
-                var spec = this._chart.getSpec();
+                var spec = pluginsSDK.spec(this._chart.getSpec());
 
-                spec.transformations = spec.transformations || {};
-                spec.transformations['defined-only'] = function (data, props) {
+                spec.addTransformation('defined-only', function (data, props) {
                     var k = props.key;
                     return _(data)
                         .chain()
@@ -52,19 +51,20 @@
                             return ((row[k] !== null) && (typeof (row[k]) !== 'undefined'));
                         })
                         .value();
-                };
+                });
 
                 var error = this.checkIfApplicable();
                 this._isApplicable = (!error);
 
                 if (!this._isApplicable) {
-                    spec.settings.log('[layers plugin]: is not applicable');
-                    spec.settings.log('[layers plugin]: ' + error);
+                    var log = spec.getSettings('log');
+                    log('[layers plugin]: is not applicable');
+                    log('[layers plugin]: ' + error);
                     return;
                 }
 
-                spec.settings.excludeNull = false;
-                spec.settings.fitModel = null;
+                spec.setSettings('excludeNull', false)
+                    .setSettings('fitModel', null);
 
                 if (settings.showPanel) {
 

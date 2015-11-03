@@ -3,6 +3,37 @@ import {FormatterRegistry} from './formatter-registry';
 
 class PluginsSDK {
 
+    static spec(specRef) {
+        return {
+            addTransformation: function (name, func) {
+                specRef.transformations = specRef.transformations || {};
+                specRef.transformations[name] = func;
+                return this;
+            },
+
+            getSettings: function (name) {
+                return specRef.settings[name];
+            },
+
+            setSettings: function (name, value) {
+                specRef.settings = specRef.settings || {};
+                specRef.settings[name] = value;
+                return this;
+            },
+
+            traverse: function (iterator) {
+                PluginsSDK.traverseSpec(specRef, iterator);
+                return this;
+            },
+
+            reduce: function (iterator, memo) {
+                var r = memo;
+                PluginsSDK.traverseSpec(specRef, (unit, parent) => (r = iterator(r, unit, parent)));
+                return r;
+            }
+        };
+    }
+
     static cloneObject(obj) {
         return JSON.parse(JSON.stringify(obj));
     }
