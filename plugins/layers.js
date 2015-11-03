@@ -42,6 +42,27 @@
                 this._chart = chart;
 
                 var spec = this._chart.getSpec();
+
+                spec.transformations = spec.transformations || {};
+                spec.transformations['defined-only'] = function (data, props) {
+                    var k = props.key;
+                    return _(data)
+                        .chain()
+                        .filter(function (row) {
+                            return ((row[k] !== null) && (typeof (row[k]) !== 'undefined'));
+                        })
+                        .value();
+                };
+
+                var error = this.checkIfApplicable();
+                this._isApplicable = (!error);
+
+                if (!this._isApplicable) {
+                    spec.settings.log('[layers plugin]: is not applicable');
+                    spec.settings.log('[layers plugin]: ' + error);
+                    return;
+                }
+
                 spec.settings.excludeNull = false;
                 spec.settings.fitModel = null;
 
@@ -75,6 +96,37 @@
                     this._container
                         .addEventListener('change', this.uiChangeEventsDispatcher, false);
                 }
+            },
+
+            checkIfApplicable: function () {
+                var error = null;
+                var specRef = this._chart.getSpec();
+                this._chart.traverseSpec(specRef, function (unit, parentUnit) {
+
+                    if (error) {
+                        return;
+                    }
+
+                    if (parentUnit && (parentUnit.type !== 'COORDS.RECT')) {
+                        error = 'Chart specification contains non-rectangular coordinates';
+                        return;
+                    }
+
+                    if (parentUnit && (parentUnit.type === 'COORDS.RECT') && (unit.type === 'COORDS.RECT')) {
+                        error = 'Chart is a facet';
+                        return;
+                    }
+
+                    if ((parentUnit) && (parentUnit.type === 'COORDS.RECT') && (unit.type !== 'COORDS.RECT')) {
+                        // is Y axis a measure?
+                        var scale = specRef.scales[unit.y];
+                        if (specRef.sources[scale.source].dims[scale.dim].type !== 'measure') {
+                            error = 'Y scale is not a measure';
+                        }
+                    }
+                });
+
+                return error;
             },
 
             predicateIsElement: function (specRef, unit, parentUnit) {
@@ -175,18 +227,7 @@
 
                 var self = this;
 
-                specRef.transformations = specRef.transformations || {};
-                specRef.transformations['defined-only'] = function (data, props) {
-                    var k = props.key;
-                    return _(data)
-                        .chain()
-                        .filter(function (row) {
-                            return ((row[k] !== null) && (typeof (row[k]) !== 'undefined'));
-                        })
-                        .value();
-                };
-
-                if (!settings.showLayers) {
+                if (!settings.showLayers || !self._isApplicable) {
                     chart.traverseSpec(
                         specRef,
                         function (unit, parentUnit) {
@@ -199,7 +240,10 @@
 
                 specRef.scales = settings.layers.reduce(
                     function (memo, l) {
-                        memo[l.y] = {type: 'linear', source: '/', dim: l.y, autoScale: true};
+                        memo[l.y] = _.extend(
+                            {type: 'linear', source: '/', dim: l.y, autoScale: true},
+                            (_.pick(l.guide || {}, 'min', 'max', 'autoScale'))
+                        );
                         return memo;
                     },
                     specRef.scales);
@@ -232,6 +276,10 @@
 
                     var totalDif = (30);
                     var totalPad = (currLayers.length * totalDif) - totalDif;
+                    var extractLabel = function (layer) {
+                        var g = layer.guide || {};
+                        return (g.label || layer.y);
+                    };
 
                     if (i === 0) {
                         chart.traverseSpec(
@@ -252,7 +300,7 @@
                                     } else if (settings.mode === 'merge') {
                                         unit.guide.y.label = (unit.guide.y.label || {});
                                         unit.guide.y.label.text = [unit.guide.y.label.text]
-                                            .concat(_(currLayers).pluck('y'))
+                                            .concat(_(currLayers).map(extractLabel))
                                             .join(', ');
                                     }
                                 }
@@ -273,7 +321,7 @@
                                 if (self.predicateIsCoord(specRef, unit)) {
                                     unit.y = xLayer.y;
                                     unit.guide.y.label = (unit.guide.y.label || {});
-                                    unit.guide.y.label.text = xLayer.y;
+                                    unit.guide.y.label.text = extractLabel(xLayer);
                                     unit.guide.x.hide = true;
 
                                     if (settings.mode === 'dock') {
@@ -322,7 +370,7 @@
 
             onRender: function (chart) {
 
-                if (settings.showPanel) {
+                if (this._isApplicable && settings.showPanel) {
                     this._container.innerHTML = this.template({
                         title: 'Layers',
                         mode: settings.mode,

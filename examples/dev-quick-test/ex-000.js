@@ -120,17 +120,39 @@ window.samples.push({
     x: ['x'],
     y: ['y'],
     color: 'type',
+    guide: {
+        y: {
+            autoScale: false,
+            min: -20,
+            max: 25,
+            label: 'main param'
+        }
+    },
     plugins: [
         tauCharts.api.plugins.get('layers')({
+            mode: 'dock',
+            showPanel: true,
             layers: [
                 {
                     type: 'area',
-                    y: 'r1'
+                    y: 'r1',
+                    guide: {
+                        min: -20,
+                        max: 25,
+                        autoScale: false,
+                        label: 'parameter 1'
+                    }
                 }
                 ,
                 {
                     type: 'bar',
-                    y: 'r'
+                    y: 'r',
+                    guide: {
+                        min: -20,
+                        max: 25,
+                        autoScale: false,
+                        label: 'parameter 2'
+                    }
                 }
             ]
         }),
