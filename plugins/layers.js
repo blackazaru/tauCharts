@@ -53,13 +53,13 @@
                         .value();
                 });
 
-                var error = this.checkIfApplicable();
-                this._isApplicable = (!error);
+                var errors = this.checkIfApplicable(spec);
+                this._isApplicable = (errors.length === 0);
 
                 if (!this._isApplicable) {
                     var log = spec.getSettings('log');
                     log('[layers plugin]: is not applicable');
-                    log('[layers plugin]: ' + error);
+                    log('[layers plugin]: ' + errors.join(' / '));
                     return;
                 }
 
@@ -98,54 +98,48 @@
                 }
             },
 
-            checkIfApplicable: function () {
-                var error = null;
-                var specRef = this._chart.getSpec();
-                this._chart.traverseSpec(specRef, function (unit, parentUnit) {
+            checkIfApplicable: function (spec) {
 
-                    if (error) {
-                        return;
+                return spec.reduce(function (errors, unit, parent) {
+
+                    if (parent && (parent.type !== 'COORDS.RECT')) {
+                        return errors.concat('Chart specification contains non-rectangular coordinates');
                     }
 
-                    if (parentUnit && (parentUnit.type !== 'COORDS.RECT')) {
-                        error = 'Chart specification contains non-rectangular coordinates';
-                        return;
+                    if (parent && (parent.type === 'COORDS.RECT') && (unit.type === 'COORDS.RECT')) {
+                        return errors.concat('Chart is a facet');
                     }
 
-                    if (parentUnit && (parentUnit.type === 'COORDS.RECT') && (unit.type === 'COORDS.RECT')) {
-                        error = 'Chart is a facet';
-                        return;
-                    }
-
-                    if ((parentUnit) && (parentUnit.type === 'COORDS.RECT') && (unit.type !== 'COORDS.RECT')) {
+                    if (parent && (parent.type === 'COORDS.RECT') && (unit.type !== 'COORDS.RECT')) {
                         // is Y axis a measure?
-                        var scale = specRef.scales[unit.y];
-                        if (specRef.sources[scale.source].dims[scale.dim].type !== 'measure') {
-                            error = 'Y scale is not a measure';
+                        var yScale = spec.getScale(unit.y);
+                        if (spec.getSourceDim(yScale.source, yScale.dim).type !== 'measure') {
+                            return errors.concat('Y scale is not a measure');
                         }
                     }
-                });
 
-                return error;
+                    return errors;
+
+                }, []);
             },
 
-            predicateIsElement: function (specRef, unit, parentUnit) {
+            isLeafElement: function (unit, parent) {
                 return (
-                    (parentUnit)
+                    (parent)
                     &&
-                    (parentUnit.type === 'COORDS.RECT')
+                    (parent.type === 'COORDS.RECT')
                     &&
                     (unit.type !== 'COORDS.RECT')
                 );
             },
 
-            predicateIsCoord: function (specRef, coordsUnit, parentUnit) {
+            isFinalCoordNode: function (unit, parent) {
                 return (
-                    (coordsUnit)
+                    (unit)
                     &&
-                    (coordsUnit.type === 'COORDS.RECT')
+                    (unit.type === 'COORDS.RECT')
                     &&
-                    (_.every(coordsUnit.units, function (subUnit) {
+                    (_.every(unit.units, function (subUnit) {
                         return subUnit.type !== 'COORDS.RECT';
                     }))
                 );
@@ -186,7 +180,7 @@
                             var ii = (i + 1);
 
                             return memo.concat({
-                                key: {x: 1, y: 1, id: (uid + ii)},
+                                key: {x: 1, y: 1, layerId: (uid + ii)},
                                 source: '$',
                                 pipe: [],
                                 units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), ii, item)]
@@ -194,7 +188,7 @@
                         },
                         [
                             {
-                                key: {x: 1, y: 1, id: (uid + 0)},
+                                key: {x: 1, y: 1, layerId: (uid + 0)},
                                 source: '$',
                                 pipe: [],
                                 units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), 0, null)]
@@ -203,22 +197,11 @@
                 };
             },
 
-            addTransformation: function (unit, transformationType, params) {
-                unit.transformation = unit.transformation || [];
-                unit.transformation.push({type: transformationType, args: params});
-                return unit;
-            },
-
-            findPrimaryYScale: function (currUnit, specRef) {
+            findPrimaryYScale: function (spec) {
                 var self = this;
-                var resY = [];
-                this._chart.traverseSpec(
-                    {unit: currUnit},
-                    function (unit) {
-                        if (self.predicateIsCoord(specRef, unit)) {
-                            resY.push(unit.y);
-                        }
-                    });
+                var resY = spec.reduce(function (memo, unit) {
+                    return memo.concat(self.isFinalCoordNode(unit) ? unit.y : []);
+                }, []);
 
                 return _.uniq(resY)[0];
             },
@@ -227,28 +210,30 @@
 
                 var self = this;
 
+                var fullSpec = pluginsSDK.spec(specRef);
+
                 if (!settings.showLayers || !self._isApplicable) {
-                    chart.traverseSpec(
-                        specRef,
-                        function (unit, parentUnit) {
-                            if (self.predicateIsElement(specRef, unit, parentUnit)) {
-                                self.addTransformation(unit, 'defined-only', {key: specRef.scales[unit.y].dim});
-                            }
-                        });
+                    fullSpec.traverse(function (unit, parentUnit) {
+                        if (self.isLeafElement(unit, parentUnit)) {
+                            pluginsSDK
+                                .unit(unit)
+                                .addTransformation('defined-only', {key: fullSpec.getScale(unit.y).dim});
+                        }
+                    });
                     return;
                 }
 
-                specRef.scales = settings.layers.reduce(
-                    function (memo, l) {
-                        memo[l.y] = _.extend(
-                            {type: 'linear', source: '/', dim: l.y, autoScale: true},
-                            (_.pick(l.guide || {}, 'min', 'max', 'autoScale'))
-                        );
-                        return memo;
-                    },
-                    specRef.scales);
+                fullSpec = settings
+                    .layers
+                    .reduce(function (memo, layer) {
+                        return memo.addScale(
+                            layer.y,
+                            _.extend(
+                                {type: 'linear', source: '/', dim: layer.y, autoScale: true},
+                                (_.pick(layer.guide || {}, 'min', 'max', 'autoScale'))));
+                    }, fullSpec);
 
-                var primaryY = self.findPrimaryYScale(specRef.unit, specRef);
+                var primaryY = self.findPrimaryYScale(fullSpec);
                 var scaleNames = _(settings.layers).pluck('y').concat(primaryY);
                 var hashBounds = scaleNames.reduce(function (memo, yi) {
                         var info = self._chart.getScaleInfo(yi);
@@ -266,9 +251,10 @@
                 if (settings.mode === 'merge') {
                     var minMax = d3.extent(_(hashBounds).chain().values().flatten().value());
                     scaleNames.forEach(function (y) {
-                        specRef.scales[y].min = minMax[0];
-                        specRef.scales[y].max = minMax[1];
-                        specRef.scales[y].autoScale = false;
+                        var yScale = fullSpec.getScale(y);
+                        yScale.min = minMax[0];
+                        yScale.max = minMax[1];
+                        yScale.autoScale = false;
                     });
                 }
 
@@ -281,63 +267,71 @@
                         return (g.label || layer.y);
                     };
 
+                    var partSpec = pluginsSDK.spec({unit:currUnit});
+
                     if (i === 0) {
-                        chart.traverseSpec(
-                            {unit:currUnit},
-                            function (unit, parentUnit) {
 
-                                if (self.predicateIsElement(specRef, unit, parentUnit)) {
-                                    self.addTransformation(unit, 'defined-only', {key: specRef.scales[unit.y].dim});
+                        partSpec.traverse(function (unit, parent) {
+
+                            if (self.isLeafElement(unit, parent)) {
+                                pluginsSDK
+                                    .unit(unit)
+                                    .addTransformation('defined-only', {key: fullSpec.getScale(unit.y).dim});
+                            }
+
+                            if (self.isFinalCoordNode(unit)) {
+
+                                if (settings.mode === 'dock') {
+                                    unit.guide.padding.l += totalPad;
+                                    unit.guide.y.label.textAnchor = 'end';
+                                    unit.guide.y.label.dock = 'right';
+                                    unit.guide.y.label.padding = -10;
+                                    unit.guide.y.label.cssClass = 'label inline';
                                 }
 
-                                if (self.predicateIsCoord(specRef, unit)) {
-                                    if (settings.mode === 'dock') {
-                                        unit.guide.padding.l += totalPad;
-                                        unit.guide.y.label.textAnchor = 'end';
-                                        unit.guide.y.label.dock = 'right';
-                                        unit.guide.y.label.padding = -10;
-                                        unit.guide.y.label.cssClass = 'label inline';
-                                    } else if (settings.mode === 'merge') {
-                                        unit.guide.y.label = (unit.guide.y.label || {});
-                                        unit.guide.y.label.text = [unit.guide.y.label.text]
-                                            .concat(_(currLayers).map(extractLabel))
-                                            .join(', ');
-                                    }
+                                if (settings.mode === 'merge') {
+                                    unit.guide.y.label = (unit.guide.y.label || {});
+                                    unit.guide.y.label.text = [unit.guide.y.label.text]
+                                        .concat(_(currLayers).map(extractLabel))
+                                        .join(', ');
                                 }
-                            });
+                            }
+                        });
 
                     } else {
 
-                        chart.traverseSpec(
-                            {unit: currUnit},
-                            function (unit, parentUnit) {
+                        partSpec.traverse(function (unit, parent) {
 
-                                if (self.predicateIsElement(specRef, unit, parentUnit)) {
-                                    unit.type = ELEMENT_TYPE[xLayer.type];
-                                    unit.y = xLayer.y;
-                                    self.addTransformation(unit, 'defined-only', {key: xLayer.y});
+                            if (self.isLeafElement(unit, parent)) {
+                                unit.type = ELEMENT_TYPE[xLayer.type];
+                                unit.y = xLayer.y;
+                                pluginsSDK
+                                    .unit(unit)
+                                    .addTransformation('defined-only', {key: xLayer.y});
+                            }
+
+                            if (self.isFinalCoordNode(unit)) {
+                                unit.y = xLayer.y;
+                                unit.guide.y.label = (unit.guide.y.label || {});
+                                unit.guide.y.label.text = extractLabel(xLayer);
+                                unit.guide.x.hide = true;
+
+                                if (settings.mode === 'dock') {
+                                    unit.guide.showGridLines = '';
+                                    unit.guide.padding.l += totalPad;
+                                    unit.guide.y.label.textAnchor = 'end';
+                                    unit.guide.y.label.dock = 'right';
+                                    unit.guide.y.label.padding = -10;
+                                    unit.guide.y.label.cssClass = 'label inline';
+                                    unit.guide.y.padding += ((totalDif * (i)) + 10 * i);
                                 }
 
-                                if (self.predicateIsCoord(specRef, unit)) {
-                                    unit.y = xLayer.y;
-                                    unit.guide.y.label = (unit.guide.y.label || {});
-                                    unit.guide.y.label.text = extractLabel(xLayer);
-                                    unit.guide.x.hide = true;
-
-                                    if (settings.mode === 'dock') {
-                                        unit.guide.showGridLines = '';
-                                        unit.guide.padding.l += totalPad;
-                                        unit.guide.y.label.textAnchor = 'end';
-                                        unit.guide.y.label.dock = 'right';
-                                        unit.guide.y.label.padding = -10;
-                                        unit.guide.y.label.cssClass = 'label inline';
-                                        unit.guide.y.padding += ((totalDif * (i)) + 10 * i);
-                                    } else if (settings.mode === 'merge') {
-                                        unit.guide.showGridLines = '';
-                                        unit.guide.y.hide = true;
-                                    }
+                                if (settings.mode === 'merge') {
+                                    unit.guide.showGridLines = '';
+                                    unit.guide.y.hide = true;
                                 }
-                            });
+                            }
+                        });
                     }
 
                     return currUnit;
@@ -358,7 +352,6 @@
 
                 '<div>',
                 '<select class="i-role-change-mode graphical-report__select graphical-report__trendlinepanel__control">',
-//              '   <option <%= ((mode === "split") ? "selected" : "") %> value="split">Split</option>',
                 '   <option <%= ((mode === "dock")  ? "selected" : "") %> value="dock">Dock</option>',
                 '   <option <%= ((mode === "merge") ? "selected" : "") %> value="merge">Merge</option>',
                 '</select>',

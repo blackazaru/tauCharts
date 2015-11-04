@@ -3,8 +3,46 @@ import {FormatterRegistry} from './formatter-registry';
 
 class PluginsSDK {
 
-    static spec(specRef) {
+    static unit(unitRef) {
+
         return {
+
+            value: function () {
+                return unitRef;
+            },
+
+            addTransformation: function (name, params) {
+                unitRef.transformation = unitRef.transformation || [];
+                unitRef.transformation.push({type: name, args: params});
+                return this;
+            },
+
+            isCoordinates: function () {
+                return ((unitRef.type || '').toUpperCase().indexOf('COORDS.') === 0);
+            },
+
+            isElementOf: function (typeOfCoordinates) {
+
+                if (this.isCoordinates()) {
+                    return false;
+                }
+
+                var xType = (unitRef.type || '');
+                var parts = (xType.split('/'));
+
+                if (parts.length === 1) {
+                    parts.unshift('RECT'); // by default
+                }
+
+                return (parts[0].toUpperCase() === typeOfCoordinates.toUpperCase());
+            }
+        };
+    }
+
+    static spec(specRef) {
+
+        return {
+
             addTransformation: function (name, func) {
                 specRef.transformations = specRef.transformations || {};
                 specRef.transformations[name] = func;
@@ -30,6 +68,25 @@ class PluginsSDK {
                 var r = memo;
                 PluginsSDK.traverseSpec(specRef, (unit, parent) => (r = iterator(r, unit, parent)));
                 return r;
+            },
+
+            getScale: function (name) {
+                return specRef.scales[name];
+            },
+
+            addScale: function (name, props) {
+                specRef.scales[name] = props;
+                return this;
+            },
+
+            getSourceData: function (sourceName) {
+                var srcData = specRef.sources[sourceName] || {data:[]};
+                return srcData.data;
+            },
+
+            getSourceDim: function (sourceName, sourceDim) {
+                var srcDims = specRef.sources[sourceName] || {dims:{}};
+                return srcDims.dims[sourceDim] || {};
             }
         };
     }
