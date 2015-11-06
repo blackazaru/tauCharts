@@ -35,7 +35,7 @@ class PluginsSDK {
             addFrame: function (frameConfig) {
                 unitRef.frames = unitRef.frames || [];
 
-                frameConfig.key.__layerid__ = ['L', (+new Date()), unitRef.frames.length].join('');
+                frameConfig.key.__layerid__ = ['L', (new Date()).getTime(), unitRef.frames.length].join('');
                 frameConfig.source = (frameConfig.hasOwnProperty('source') ?
                     (frameConfig.source) :
                     (unitRef.expression.source));

@@ -296,5 +296,28 @@ define(function (require) {
             }, []);
             expect(m.join('-')).to.equal('(nil>A)-(A>A0)-(A>A1)-(A1>A11)');
         });
+
+        it('should support [unit.addFrame] method', function () {
+            var unitRef = {
+                type: 'COORDS.RECT',
+                expression: {
+                    source: '$',
+                    inherit: false,
+                    operator: false
+                }
+            };
+            var unit = sdk.unit(unitRef);
+            unit.addFrame({key: {x:1, y: 1}});
+            expect(unit.value().frames.length).to.equal(1);
+            expect(unit.value().frames[0].source).to.equal('$');
+            expect(unit.value().frames[0].pipe).to.deep.equal([]);
+
+            unit.addFrame({key: {x:1, y: 1}});
+            var frames = unit.value().frames;
+            expect(frames.length).to.equal(2);
+            expect(frames[0].key.hasOwnProperty('__layerid__')).to.equal(true);
+            expect(frames[1].key.hasOwnProperty('__layerid__')).to.equal(true);
+            expect(frames[0].key.__layerid__).to.not.equal(frames[1].key.__layerid__);
+        });
     });
 });
