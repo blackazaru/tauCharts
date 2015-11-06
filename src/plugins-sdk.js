@@ -1,134 +1,16 @@
 import {default as _} from 'underscore';
 import {FormatterRegistry} from './formatter-registry';
+import {Unit} from './plugins-sdk/unit';
+import {Spec} from './plugins-sdk/spec';
 
 class PluginsSDK {
 
     static unit(unitRef) {
-
-        return {
-
-            value: function () {
-                return unitRef;
-            },
-
-            clone: function () {
-                return PluginsSDK.cloneObject(unitRef);
-            },
-
-            traverse: function (iterator) {
-
-                var fnTraverse = (node, fnIterator, parentNode) => {
-                    fnIterator(node, parentNode);
-                    (node.units || []).map((x) => fnTraverse(x, fnIterator, node));
-                };
-
-                fnTraverse(unitRef, iterator, null);
-                return this;
-            },
-
-            reduce: function (iterator, memo) {
-                var r = memo;
-                this.traverse((unit, parent) => (r = iterator(r, unit, parent)));
-                return r;
-            },
-
-            addFrame: function (frameConfig) {
-                unitRef.frames = unitRef.frames || [];
-
-                frameConfig.key.__layerid__ = ['L', (new Date()).getTime(), unitRef.frames.length].join('');
-                frameConfig.source = (frameConfig.hasOwnProperty('source') ?
-                    (frameConfig.source) :
-                    (unitRef.expression.source));
-
-                frameConfig.pipe = frameConfig.pipe || [];
-
-                unitRef.frames.push(frameConfig);
-                return this;
-            },
-
-            addTransformation: function (name, params) {
-                unitRef.transformation = unitRef.transformation || [];
-                unitRef.transformation.push({type: name, args: params});
-                return this;
-            },
-
-            isCoordinates: function () {
-                return ((unitRef.type || '').toUpperCase().indexOf('COORDS.') === 0);
-            },
-
-            isElementOf: function (typeOfCoordinates) {
-
-                if (this.isCoordinates()) {
-                    return false;
-                }
-
-                var xType = (unitRef.type || '');
-                var parts = (xType.split('/'));
-
-                if (parts.length === 1) {
-                    parts.unshift('RECT'); // by default
-                }
-
-                return (parts[0].toUpperCase() === typeOfCoordinates.toUpperCase());
-            }
-        };
+        return new Unit(unitRef);
     }
 
     static spec(specRef) {
-
-        return {
-
-            value: function () {
-                return specRef;
-            },
-
-            unit: function (newUnit) {
-                if (newUnit) {
-                    specRef.unit = newUnit;
-                }
-                return PluginsSDK.unit(specRef.unit);
-            },
-
-            addTransformation: function (name, func) {
-                specRef.transformations = specRef.transformations || {};
-                specRef.transformations[name] = func;
-                return this;
-            },
-
-            getSettings: function (name) {
-                return specRef.settings[name];
-            },
-
-            setSettings: function (name, value) {
-                specRef.settings = specRef.settings || {};
-                specRef.settings[name] = value;
-                return this;
-            },
-
-            getScale: function (name) {
-                return specRef.scales[name];
-            },
-
-            addScale: function (name, props) {
-                specRef.scales[name] = props;
-                return this;
-            },
-
-            regSource: function (sourceName, sourceObject) {
-                specRef.sources[sourceName] = sourceObject;
-                return this;
-            },
-
-            getSourceData: function (sourceName) {
-                var srcData = specRef.sources[sourceName] || {data:[]};
-                return srcData.data;
-            },
-
-            getSourceDim: function (sourceName, sourceDim) {
-                var srcDims = specRef.sources[sourceName] || {dims:{}};
-                return srcDims.dims[sourceDim] || {};
-            }
-        };
+        return new Spec(specRef);
     }
 
     static cloneObject(obj) {
