@@ -11,6 +11,41 @@ class PluginsSDK {
                 return unitRef;
             },
 
+            clone: function () {
+                return PluginsSDK.cloneObject(unitRef);
+            },
+
+            traverse: function (iterator) {
+
+                var fnTraverse = (node, fnIterator, parentNode) => {
+                    fnIterator(node, parentNode);
+                    (node.units || []).map((x) => fnTraverse(x, fnIterator, node));
+                };
+
+                fnTraverse(unitRef, iterator, null);
+                return this;
+            },
+
+            reduce: function (iterator, memo) {
+                var r = memo;
+                this.traverse((unit, parent) => (r = iterator(r, unit, parent)));
+                return r;
+            },
+
+            addFrame: function (frameConfig) {
+                unitRef.frames = unitRef.frames || [];
+
+                frameConfig.key.__layerid__ = ['L', (+new Date()), unitRef.frames.length].join('');
+                frameConfig.source = (frameConfig.hasOwnProperty('source') ?
+                    (frameConfig.source) :
+                    (unitRef.expression.source));
+
+                frameConfig.pipe = frameConfig.pipe || [];
+
+                unitRef.frames.push(frameConfig);
+                return this;
+            },
+
             addTransformation: function (name, params) {
                 unitRef.transformation = unitRef.transformation || [];
                 unitRef.transformation.push({type: name, args: params});
@@ -43,6 +78,17 @@ class PluginsSDK {
 
         return {
 
+            value: function () {
+                return specRef;
+            },
+
+            unit: function (newUnit) {
+                if (newUnit) {
+                    specRef.unit = newUnit;
+                }
+                return PluginsSDK.unit(specRef.unit);
+            },
+
             addTransformation: function (name, func) {
                 specRef.transformations = specRef.transformations || {};
                 specRef.transformations[name] = func;
@@ -59,23 +105,17 @@ class PluginsSDK {
                 return this;
             },
 
-            traverse: function (iterator) {
-                PluginsSDK.traverseSpec(specRef, iterator);
-                return this;
-            },
-
-            reduce: function (iterator, memo) {
-                var r = memo;
-                PluginsSDK.traverseSpec(specRef, (unit, parent) => (r = iterator(r, unit, parent)));
-                return r;
-            },
-
             getScale: function (name) {
                 return specRef.scales[name];
             },
 
             addScale: function (name, props) {
                 specRef.scales[name] = props;
+                return this;
+            },
+
+            regSource: function (sourceName, sourceObject) {
+                specRef.sources[sourceName] = sourceObject;
                 return this;
             },
 

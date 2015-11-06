@@ -10,7 +10,36 @@ define(function (require) {
             sdk = tauChart.api.pluginsSDK;
         });
 
-        it('should support [addTransformation] method', function () {
+        it('should support [spec.value] method', function () {
+            var specRef = {a: 1};
+            expect(sdk.spec(specRef).value()).to.equal(specRef);
+        });
+
+        it('should support [spec.unit] method', function () {
+            var specRef = {
+                a: 1,
+                unit: {
+                    type: 'COORDS.RECT',
+                    units: [
+                        {type: 'ELEMENT.LINE'}
+                    ]
+                }
+            };
+            expect(sdk.spec(specRef).unit().value()).to.equal(specRef.unit);
+
+            var prevUnit = sdk.spec(specRef).unit();
+            var newUnit = {
+                type: 'COORDS.RECT',
+                units: [
+                    {type: 'ELEMENT.POINT'}
+                ]
+            };
+            expect(sdk.spec(specRef).unit(newUnit).value()).to.equal(newUnit);
+            expect(sdk.spec(specRef).unit().value()).to.equal(newUnit);
+            expect(sdk.spec(specRef).unit().value()).to.not.equal(prevUnit.value());
+        });
+
+        it('should support [spec.addTransformation] method', function () {
             var specRef = {};
             sdk.spec(specRef).addTransformation('test', ((data) => (data)));
 
@@ -19,7 +48,7 @@ define(function (require) {
             expect(specRef.transformations.test(1)).to.equal(1);
         });
 
-        it('should support [getSettings] method', function () {
+        it('should support [spec.getSettings] method', function () {
             var specRef = {
                 settings: {
                     testSettings: 'blabla'
@@ -29,7 +58,7 @@ define(function (require) {
             expect(sdk.spec(specRef).getSettings('test2')).to.equal(undefined);
         });
 
-        it('should support [setSettings] method', function () {
+        it('should support [spec.setSettings] method', function () {
             var specRef = {
                 settings: {
                     testSettings: 'blabla'
@@ -43,70 +72,7 @@ define(function (require) {
             expect(specRef.settings.test2).to.equal('test-value');
         });
 
-        it('should support [traverse] method', function () {
-            var specRef = {
-                unit: {
-                    type: 'A',
-                    units: [
-                        {
-                            type: 'A0'
-                        }
-                        ,
-                        {
-                            type: 'A1',
-                            units: [
-                                {
-                                    type: 'A11'
-                                }
-                            ]
-                        }
-                    ]
-                }
-            };
-            var r = [];
-            sdk.spec(specRef).traverse(function (unit, parent) {
-                var p = parent || {type:'nil'};
-                r.push('(' + p.type + '>' + unit.type + ')');
-            });
-            expect(r.join('-')).to.equal('(nil>A)-(A>A0)-(A>A1)-(A1>A11)');
-        });
-
-        it('should support [reduce] method', function () {
-            var specRef = {
-                unit: {
-                    type: 'A',
-                    units: [
-                        {
-                            type: 'A0'
-                        }
-                        ,
-                        {
-                            type: 'A1',
-                            units: [
-                                {
-                                    type: 'A11'
-                                }
-                            ]
-                        }
-                    ]
-                }
-            };
-
-            var k = sdk.spec(specRef).reduce(function (memo, unit, parent) {
-                memo += 1;
-                return memo;
-            }, 0);
-            expect(k).to.equal(4);
-
-            var m = sdk.spec(specRef).reduce(function (memo, unit, parent) {
-                var p = parent || {type:'nil'};
-                var token = ('(' + p.type + '>' + unit.type + ')');
-                return memo.concat([token]);
-            }, []);
-            expect(m.join('-')).to.equal('(nil>A)-(A>A0)-(A>A1)-(A1>A11)');
-        });
-
-        it('should support [getScale] method', function () {
+        it('should support [spec.getScale] method', function () {
             var specRef = {
                 scales: {
                     'a': {dim:'a', source:'/'}
@@ -116,7 +82,7 @@ define(function (require) {
             expect(sdk.spec(specRef).getScale('a')).to.equal(specRef.scales.a);
         });
 
-        it('should support [addScale] method', function () {
+        it('should support [spec.addScale] method', function () {
             var specRef = {
                 scales: {
                     'a': {dim:'a', source:'/'}
@@ -128,7 +94,35 @@ define(function (require) {
             expect(spec.getScale('b')).to.equal(specRef.scales.b);
         });
 
-        it('should support [getSourceData] method', function () {
+        it('should support [spec.regSource] method', function () {
+            var specRef = {
+                sources: {
+                    'test': {
+                        dims: {a: {type:'measure'}},
+                        data: [
+                            {a:1}
+                        ]
+                    }
+                }
+            };
+
+            var sourceToRegister = {
+                dims: {
+                    x: {type: 'category'},
+                    y: {type: 'category'}
+                },
+                data: [{x: 1, y: 1}]
+            };
+
+            var spec = sdk.spec(specRef);
+            spec.regSource('src', sourceToRegister);
+
+            expect(spec.getSourceData('src')).to.equal(specRef.sources.src.data);
+            expect(spec.getSourceDim('src', 'x')).to.equal(specRef.sources.src.dims.x);
+            expect(spec.getSourceDim('src', 'y')).to.equal(specRef.sources.src.dims.y);
+        });
+
+        it('should support [spec.getSourceData] method', function () {
             var specRef = {
                 sources: {
                     'test': {
@@ -150,7 +144,7 @@ define(function (require) {
                 .equal([]);
         });
 
-        it('should support [getSourceDim] method', function () {
+        it('should support [spec.getSourceDim] method', function () {
             var specRef = {
                 sources: {
                     'test': {
@@ -217,6 +211,14 @@ define(function (require) {
             expect(u.value()).to.equal(unitRef);
         });
 
+        it('should support [unit.clone] method', function () {
+            var unitRef = {type: 'COORDS.RECT'};
+            var unit = sdk.unit(unitRef);
+            expect(unit.clone()).to.deep.equal(unitRef);
+            expect(unit.clone()).to.not.equal(unitRef);
+            expect(unit.clone()).to.not.equal(unit.clone());
+        });
+
         it('should support [unit.isCoord] method', function () {
             expect(sdk.unit({type: 'COORDS.PARALLEL'}).isCoordinates()).to.equal(true);
             expect(sdk.unit({type: 'COORDS.RECT'}).isCoordinates()).to.equal(true);
@@ -227,6 +229,72 @@ define(function (require) {
 
             expect(sdk.unit({type: 'PARALLEL/ELEMENT.LINE'}).isElementOf('RECT')).to.equal(false);
             expect(sdk.unit({type: 'PARALLEL/ELEMENT.LINE'}).isElementOf('parallel')).to.equal(true);
+        });
+
+        it('should support [unit.traverse] method', function () {
+            var specRef = {
+                unit: {
+                    type: 'A',
+                    units: [
+                        {
+                            type: 'A0'
+                        }
+                        ,
+                        {
+                            type: 'A1',
+                            units: [
+                                {
+                                    type: 'A11'
+                                }
+                            ]
+                        }
+                    ]
+                }
+            };
+            var r = [];
+            sdk
+                .spec(specRef)
+                .unit()
+                .traverse(function (unit, parent) {
+                    var p = parent || {type: 'nil'};
+                    r.push('(' + p.type + '>' + unit.type + ')');
+                });
+            expect(r.join('-')).to.equal('(nil>A)-(A>A0)-(A>A1)-(A1>A11)');
+        });
+
+        it('should support [unit.reduce] method', function () {
+            var specRef = {
+                unit: {
+                    type: 'A',
+                    units: [
+                        {
+                            type: 'A0'
+                        }
+                        ,
+                        {
+                            type: 'A1',
+                            units: [
+                                {
+                                    type: 'A11'
+                                }
+                            ]
+                        }
+                    ]
+                }
+            };
+
+            var k = sdk.spec(specRef).unit().reduce(function (memo, unit, parent) {
+                memo += 1;
+                return memo;
+            }, 0);
+            expect(k).to.equal(4);
+
+            var m = sdk.spec(specRef).unit().reduce(function (memo, unit, parent) {
+                var p = parent || {type:'nil'};
+                var token = ('(' + p.type + '>' + unit.type + ')');
+                return memo.concat([token]);
+            }, []);
+            expect(m.join('-')).to.equal('(nil>A)-(A>A0)-(A>A1)-(A1>A11)');
         });
     });
 });

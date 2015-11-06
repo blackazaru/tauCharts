@@ -100,7 +100,7 @@
 
             checkIfApplicable: function (spec) {
 
-                return spec.reduce(function (errors, unit, parent) {
+                return spec.unit().reduce(function (errors, unit, parent) {
 
                     if (parent && (parent.type !== 'COORDS.RECT')) {
                         return errors.concat('Chart specification contains non-rectangular coordinates');
@@ -145,61 +145,38 @@
                 );
             },
 
-            buildLayersLayout: function (specRef, layers, layerInvoker) {
+            buildLayersLayout: function (fullSpec) {
 
-                specRef.sources['$'] = {
-                    dims: {
-                        x: {type: 'category'},
-                        y: {type: 'category'}
-                    },
-                    data: [{x: 1, y: 1}]
-                };
-
-                specRef.scales['xLayoutScale'] = {type: 'ordinal', source: '$', dim: 'x'};
-                specRef.scales['yLayoutScale'] = {type: 'ordinal', source: '$', dim: 'y'};
-
-                var prevUnit = specRef.unit;
-                var uid = ('ID' + (+ new Date()));
-                specRef.unit = {
-                    type: 'COORDS.RECT',
-                    x: 'xLayoutScale',
-                    y: 'yLayoutScale',
-                    expression: {
-                        source: '$',
-                        inherit: false,
-                        operator: false
-                    },
-                    guide: {
-                        showGridLines: '',
-                        x: {cssClass: 'facet-axis'},
-                        y: {cssClass: 'facet-axis'}
-                    },
-                    frames: layers.reduce(
-                        function (memo, item, i) {
-
-                            var ii = (i + 1);
-
-                            return memo.concat({
-                                key: {x: 1, y: 1, layerId: (uid + ii)},
-                                source: '$',
-                                pipe: [],
-                                units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), ii, item)]
-                            });
+                return (fullSpec.regSource('$',
+                    {
+                        dims: {
+                            x: {type: 'category'},
+                            y: {type: 'category'}
                         },
-                        [
-                            {
-                                key: {x: 1, y: 1, layerId: (uid + 0)},
-                                source: '$',
-                                pipe: [],
-                                units: [layerInvoker(pluginsSDK.cloneObject(prevUnit), 0, null)]
-                            }
-                        ])
-                };
+                        data: [{x: 1, y: 1}]
+                    })
+                    .addScale('xLayoutScale', {type: 'ordinal', source: '$', dim: 'x'})
+                    .addScale('yLayoutScale', {type: 'ordinal', source: '$', dim: 'y'})
+                    .unit({
+                        type: 'COORDS.RECT',
+                        x: 'xLayoutScale',
+                        y: 'yLayoutScale',
+                        expression: {
+                            source: '$',
+                            inherit: false,
+                            operator: false
+                        },
+                        guide: {
+                            showGridLines: '',
+                            x: {cssClass: 'facet-axis'},
+                            y: {cssClass: 'facet-axis'}
+                        }
+                    }));
             },
 
             findPrimaryYScale: function (spec) {
                 var self = this;
-                var resY = spec.reduce(function (memo, unit) {
+                var resY = spec.unit().reduce(function (memo, unit) {
                     return memo.concat(self.isFinalCoordNode(unit) ? unit.y : []);
                 }, []);
 
@@ -213,7 +190,7 @@
                 var fullSpec = pluginsSDK.spec(specRef);
 
                 if (!settings.showLayers || !self._isApplicable) {
-                    fullSpec.traverse(function (unit, parentUnit) {
+                    fullSpec.unit().traverse(function (unit, parentUnit) {
                         if (self.isLeafElement(unit, parentUnit)) {
                             pluginsSDK
                                 .unit(unit)
@@ -258,84 +235,102 @@
                     });
                 }
 
-                self.buildLayersLayout(specRef, currLayers, function (currUnit, i, xLayer) {
+                var prevUnit = fullSpec.unit();
+                var cursor;
+                var totalDif = (30);
+                var totalPad = (currLayers.length * totalDif) - totalDif;
+                var extractLabel = function (layer) {
+                    var g = layer.guide || {};
+                    return (g.label || layer.y);
+                };
 
-                    var totalDif = (30);
-                    var totalPad = (currLayers.length * totalDif) - totalDif;
-                    var extractLabel = function (layer) {
-                        var g = layer.guide || {};
-                        return (g.label || layer.y);
-                    };
+                var currUnit = self
+                    .buildLayersLayout(fullSpec)
+                    .addFrame({
+                        key: {x: 1, y: 1},
+                        units: [
+                            (cursor = pluginsSDK
+                                .unit(prevUnit.clone()))
+                                .reduce(function (memo, unit, parent) {
 
-                    var partSpec = pluginsSDK.spec({unit:currUnit});
+                                    if (self.isLeafElement(unit, parent)) {
+                                        pluginsSDK
+                                            .unit(unit)
+                                            .addTransformation('defined-only', {key: fullSpec.getScale(unit.y).dim});
+                                    }
 
-                    if (i === 0) {
+                                    if (self.isFinalCoordNode(unit)) {
 
-                        partSpec.traverse(function (unit, parent) {
+                                        if (settings.mode === 'dock') {
+                                            unit.guide.padding.l += totalPad;
+                                            unit.guide.y.label.textAnchor = 'end';
+                                            unit.guide.y.label.dock = 'right';
+                                            unit.guide.y.label.padding = -10;
+                                            unit.guide.y.label.cssClass = 'label inline';
+                                        }
 
-                            if (self.isLeafElement(unit, parent)) {
-                                pluginsSDK
-                                    .unit(unit)
-                                    .addTransformation('defined-only', {key: fullSpec.getScale(unit.y).dim});
-                            }
+                                        if (settings.mode === 'merge') {
+                                            unit.guide.y.label = (unit.guide.y.label || {});
+                                            unit.guide.y.label.text = [unit.guide.y.label.text]
+                                                .concat(_(currLayers).map(extractLabel))
+                                                .join(', ');
+                                        }
+                                    }
+                                    return memo;
+                                }, cursor)
+                                .value()
+                        ]
+                    });
 
-                            if (self.isFinalCoordNode(unit)) {
+                currLayers.reduce(
+                    function (specUnitObject, xLayer, ii) {
 
-                                if (settings.mode === 'dock') {
-                                    unit.guide.padding.l += totalPad;
-                                    unit.guide.y.label.textAnchor = 'end';
-                                    unit.guide.y.label.dock = 'right';
-                                    unit.guide.y.label.padding = -10;
-                                    unit.guide.y.label.cssClass = 'label inline';
-                                }
+                        var i = ii + 1;
 
-                                if (settings.mode === 'merge') {
-                                    unit.guide.y.label = (unit.guide.y.label || {});
-                                    unit.guide.y.label.text = [unit.guide.y.label.text]
-                                        .concat(_(currLayers).map(extractLabel))
-                                        .join(', ');
-                                }
-                            }
+                        return specUnitObject.addFrame({
+                            key: {x: 1, y: 1},
+                            units: [
+                                (cursor = pluginsSDK
+                                    .unit(prevUnit.clone()))
+                                    .reduce(function (memo, unit, parent) {
+
+                                        if (self.isLeafElement(unit, parent)) {
+                                            unit.type = ELEMENT_TYPE[xLayer.type];
+                                            unit.y = xLayer.y;
+                                            pluginsSDK
+                                                .unit(unit)
+                                                .addTransformation('defined-only', {key: xLayer.y});
+                                        }
+
+                                        if (self.isFinalCoordNode(unit)) {
+                                            unit.y = xLayer.y;
+                                            unit.guide.y.label = (unit.guide.y.label || {});
+                                            unit.guide.y.label.text = extractLabel(xLayer);
+                                            unit.guide.x.hide = true;
+
+                                            if (settings.mode === 'dock') {
+                                                unit.guide.showGridLines = '';
+                                                unit.guide.padding.l += totalPad;
+                                                unit.guide.y.label.textAnchor = 'end';
+                                                unit.guide.y.label.dock = 'right';
+                                                unit.guide.y.label.padding = -10;
+                                                unit.guide.y.label.cssClass = 'label inline';
+                                                unit.guide.y.padding += ((totalDif * (i)) + 10 * i);
+                                            }
+
+                                            if (settings.mode === 'merge') {
+                                                unit.guide.showGridLines = '';
+                                                unit.guide.y.hide = true;
+                                            }
+                                        }
+                                        return memo;
+                                    }, cursor)
+                                    .value()
+                            ]
                         });
 
-                    } else {
-
-                        partSpec.traverse(function (unit, parent) {
-
-                            if (self.isLeafElement(unit, parent)) {
-                                unit.type = ELEMENT_TYPE[xLayer.type];
-                                unit.y = xLayer.y;
-                                pluginsSDK
-                                    .unit(unit)
-                                    .addTransformation('defined-only', {key: xLayer.y});
-                            }
-
-                            if (self.isFinalCoordNode(unit)) {
-                                unit.y = xLayer.y;
-                                unit.guide.y.label = (unit.guide.y.label || {});
-                                unit.guide.y.label.text = extractLabel(xLayer);
-                                unit.guide.x.hide = true;
-
-                                if (settings.mode === 'dock') {
-                                    unit.guide.showGridLines = '';
-                                    unit.guide.padding.l += totalPad;
-                                    unit.guide.y.label.textAnchor = 'end';
-                                    unit.guide.y.label.dock = 'right';
-                                    unit.guide.y.label.padding = -10;
-                                    unit.guide.y.label.cssClass = 'label inline';
-                                    unit.guide.y.padding += ((totalDif * (i)) + 10 * i);
-                                }
-
-                                if (settings.mode === 'merge') {
-                                    unit.guide.showGridLines = '';
-                                    unit.guide.y.hide = true;
-                                }
-                            }
-                        });
-                    }
-
-                    return currUnit;
-                });
+                    },
+                    currUnit);
             },
 
             // jscs:disable maximumLineLength
