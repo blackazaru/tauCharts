@@ -459,5 +459,75 @@ define(function (require) {
                 }).renderTo(testDiv);
             }).to.throw('blahblah operator is not supported');
         });
+
+        it('should allow spec with raw frames', function () {
+
+            var testDiv = document.getElementById('test-div');
+
+            var spec = {
+
+                settings: {fitModel: 'none'},
+
+                sources: {
+                    '?': {
+                        dims: {},
+                        data: []
+                    },
+
+                    '$': {
+                        dims: {
+                            x: {type: 'category'},
+                            y: {type: 'category'}
+                        },
+                        data: [
+                            {x: 1, y: 1}
+                        ]
+                    }
+                },
+
+                scales: {
+                    'xScale': {type: 'ordinal', source: '$', dim: 'x'},
+                    'yScale': {type: 'ordinal', source: '$', dim: 'y'}
+                },
+
+                unit: {
+                    type: "COORDS.RECT",
+                    x: 'xScale',
+                    y: 'yScale',
+                    expression: {
+                        source: '$',
+                        inherit: false,
+                        operator: false
+                    },
+                    guide: {
+                        showGridLines: ""
+                    },
+                    frames: [
+                        {
+                            key: {x: 1, y: 1, i:0},
+                            source: '$',
+                            pipe: [],
+                            units: []
+                        }
+                        ,
+                        {
+                            key: {x: 1, y: 1, i:1},
+                            source: '$',
+                            pipe: [],
+                            units: []
+                        }
+                    ]
+                }
+            };
+
+            var renderEvent = 0;
+            var c = new tauChart.Plot(spec);
+            c.on('render', function () {
+                renderEvent++;
+            });
+            c.renderTo(testDiv);
+
+            expect(renderEvent).to.equal(1);
+        });
     });
 });
