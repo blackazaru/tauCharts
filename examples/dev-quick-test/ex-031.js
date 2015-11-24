@@ -6081,7 +6081,8 @@ window.samples.push({
                 "label": "End Date"
             },
             "y": {
-                "label": "Cycle Time"
+                "label": "Cycle Time",
+                "positionY": "right"
             },
             "color": {
                 "label": "Type"

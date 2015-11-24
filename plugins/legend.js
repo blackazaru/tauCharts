@@ -143,13 +143,13 @@
 
             // jscs:disable maximumLineLength
             _containerTemplate: '<div class="graphical-report__legend"></div>',
-            _template: _.template('<div class="graphical-report__legend__wrap"><div class="graphical-report__legend__title"><%=name%></div><%=items%></div>'),
+            _template: _.template('<div class="graphical-report__legend__wrap"><%=items%></div>'),
             _itemTemplate: _.template([
                 '<div data-scale-id=\'<%= scaleId %>\' data-dim=\'<%= dim %>\' data-value=\'<%= value %>\' class="graphical-report__legend__item graphical-report__legend__item-color <%=classDisabled%>">',
                 '<div class="graphical-report__legend__guide__wrap">',
                 '<div class="graphical-report__legend__guide <%=color%>"></div>',
                 '</div>',
-                '<%=label%>',
+                '<p class="graphical-report__legend__guide__label label_<%=color%>"><%=label%></p>',
                 '</div>'
             ].join('')),
             _itemFillTemplate: _.template([

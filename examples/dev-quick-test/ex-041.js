@@ -14,14 +14,16 @@ window.samples.push({
         tauCharts.api.plugins.get('layers')({
             showPanel: true,
             layers: [
-                {
+                 {
                     type: 'stacked-bar',
-                    y: ['visits', 'clicks']
+                    y: ['visits', 'clicks'],
+                    labelText: '1111111'
                 }
                 ,
                 {
                     type: 'area',
-                    y: 'likes'
+                    y: 'likes',
+                    labelText: '2222222'
                 }
             ]
         })

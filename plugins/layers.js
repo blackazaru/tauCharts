@@ -105,6 +105,7 @@
                         return memo.concat(layer.y);
                     }, []);
 
+
                 chart.setupChartSourceModel(function (originalSources) {
 
                     var newDim = {};
@@ -345,7 +346,7 @@
                             unit.guide.y.label.cssClass = 'label inline';
 
                             if (self.isFacet) {
-                                unit.guide.y.label.text = labelText;
+                                unit.guide.y.label.text = /*currLayers.labelText ||*/ labelText;
                             }
                         }
 
@@ -396,7 +397,7 @@
                     if (isFinalCoord) {
                         unit.y = self.getScaleName(xLayer.y);
                         unit.guide.y.label = (unit.guide.y.label || {});
-                        unit.guide.y.label.text = self.extractLabel(xLayer);
+                        unit.guide.y.label.text = xLayer.labelText || self.extractLabel(xLayer);
                         unit.guide.x.hide = true;
 
                         if (settings.mode === 'dock') {
