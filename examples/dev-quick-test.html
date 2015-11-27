@@ -62,23 +62,53 @@
                         key: k,
                         val: k ? 'High': 'Low'
                     };
-
                     r.priorityName = k ? 'High': 'Low';
-
                     r.severity = k ? 'Must Have': 'Nice to have';
-
                     if (i === 7) {
                         r.severity = 'Out of index';
                     }
-
                     return r;
                 });
-
         window.samples = [];
     </script>
 
-
+    <script src="dev-quick-test/ex-000.js"></script>
+    <script src="dev-quick-test/ex-001.js"></script>
+    <script src="dev-quick-test/ex-002.js"></script>
+    <script src="dev-quick-test/ex-003.js"></script>
+    <script src="dev-quick-test/ex-004.js"></script>
+    <script src="dev-quick-test/ex-005.js"></script>
+    <script src="dev-quick-test/ex-006.js"></script>
+    <script src="dev-quick-test/ex-007.js"></script>
+    <script src="dev-quick-test/ex-008.js"></script>
+    <script src="dev-quick-test/ex-009.js"></script>
+    <script src="dev-quick-test/ex-010.js"></script>
+    <script src="dev-quick-test/ex-011.js"></script>
+    <script src="dev-quick-test/ex-012.js"></script>
+    <script src="dev-quick-test/ex-013.js"></script>
+    <script src="dev-quick-test/ex-014.js"></script>
+    <script src="dev-quick-test/ex-015.js"></script>
+    <script src="dev-quick-test/ex-016.js"></script>
+    <script src="dev-quick-test/ex-017.js"></script>
+    <script src="dev-quick-test/ex-018.js"></script>
+    <script src="dev-quick-test/ex-019.js"></script>
+    <script src="dev-quick-test/ex-020.js"></script>
+    <script src="dev-quick-test/ex-021.js"></script>
+    <script src="dev-quick-test/ex-022.js"></script>
+    <script src="dev-quick-test/ex-023.js"></script>
+    <script src="dev-quick-test/ex-024.js"></script>
+    <script src="dev-quick-test/ex-025.js"></script>
+    <script src="dev-quick-test/ex-026.js"></script>
+    <script src="dev-quick-test/ex-027.js"></script>
+    <script src="dev-quick-test/ex-028.js"></script>
+    <script src="dev-quick-test/ex-029.js"></script>
+    <script src="dev-quick-test/ex-030.js"></script>
     <script src="dev-quick-test/ex-031.js"></script>
+
+    <script src="dev-quick-test/ex-040.js"></script>
+    <script src="dev-quick-test/ex-041.js"></script>
+    <script src="dev-quick-test/ex-042.js"></script>
+    <script src="dev-quick-test/ex-043.js"></script>
 
 </head>
 <body>
@@ -87,15 +117,12 @@
     window.charts = [];
     window.samples.filter(_.identity).forEach(function (cfg, i) {
         $('body').append('<div class="cc" id="div' + i + '"></div>');
-
         cfg.settings = cfg.settings || {};
         cfg.settings.fitModel = cfg.settings.fitModel || 'normal'; // 'entire-view'
-
         var chart = (cfg.hasOwnProperty('type')) ?
                 (new tauCharts.Chart(cfg)) :
                 (new tauCharts.Plot(cfg));
         chart.renderTo('#div' + i);
-
         window.charts.push(chart);
     });
 </script>

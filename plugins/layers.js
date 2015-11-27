@@ -426,13 +426,14 @@
 
             extractLabel: function (layer) {
                 var g = layer.guide || {};
+                g.label = (_.isString(g.label) ? {text: g.label} : g.label);
                 var l = (g.label || {});
 
                 if (_.isArray(layer.y)) {
                     return layer.y.join(', ');
                 }
 
-                return (g.label || (l.text) || (l._original_text) || layer.y);
+                return ((l.text) || (l._original_text) || layer.y);
             },
 
             onSpecReady: function (chart, specRef) {
@@ -502,10 +503,14 @@
 
                 if (self._isApplicable && (settings.mode === 'merge')) {
 
+                    var fullSpec = pluginsSDK.spec(self._chart.getSpec());
                     var primaryY = self.primaryY.scaleName;
                     var scaleNames = _(settings.layers)
                         .map(function (layer) {
                             return self.getScaleName(layer.y);
+                        })
+                        .filter(function (name) {
+                            return fullSpec.getScale(name);
                         })
                         .concat(primaryY);
 
@@ -519,8 +524,6 @@
                         {});
 
                     var minMax = d3.extent(_(hashBounds).chain().values().flatten().value());
-                    var fullSpec = pluginsSDK.spec(self._chart.getSpec());
-
                     scaleNames.forEach(function (y) {
                         var yScale = fullSpec.getScale(y);
                         yScale.min = minMax[0];
